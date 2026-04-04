@@ -35,6 +35,12 @@ describe('getCalendar', () => {
     expect(cal.identifier).toBe('gregory');
   });
 
+  it('returns cached instance on repeated calls (Bug 15)', () => {
+    const a = getCalendar('persian');
+    const b = getCalendar('persian');
+    expect(a).toBe(b);
+  });
+
   it('supports all documented calendars', () => {
     const expected = [
       'gregory', 'persian', 'islamic', 'islamic-umalqura',

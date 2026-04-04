@@ -1,5 +1,6 @@
-import { CalendarDate, toCalendar } from '@internationalized/date';
+import { CalendarDate } from '@internationalized/date';
 import { getCalendar } from '../core/locale.js';
+import { calendarDateToNative, resolveIntlCalendar } from './common.js';
 
 /**
  * Format a CalendarDate for display using Intl.DateTimeFormat.
@@ -61,21 +62,12 @@ export function formatMonthYear(year, month, locale, calendarId) {
  */
 export function getGregorianEquivalent(date, locale) {
   if (!date) return '';
-  const greg = toCalendar(date, getCalendar('gregory'));
   const formatter = new Intl.DateTimeFormat(locale || 'en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     calendar: 'gregory',
   });
-  return formatter.format(new Date(greg.year, greg.month - 1, greg.day));
+  return formatter.format(calendarDateToNative(date));
 }
 
-function calendarDateToNative(date) {
-  const greg = toCalendar(date, getCalendar('gregory'));
-  return new Date(greg.year, greg.month - 1, greg.day);
-}
-
-function resolveIntlCalendar(calendarId) {
-  return calendarId === 'islamic' ? 'islamic-umalqura' : calendarId;
-}

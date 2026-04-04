@@ -1,5 +1,6 @@
 import { CalendarDate, toCalendar, today, isSameDay } from '@internationalized/date';
 import { getCalendar } from './locale.js';
+import { getTimeZone } from '../utils/common.js';
 
 /**
  * Create initial state for the datepicker.
@@ -171,18 +172,19 @@ export function parseISOToCalendar(iso, calendar) {
   if (!iso) return null;
   const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
-  const greg = new CalendarDate(
-    parseInt(match[1]),
-    parseInt(match[2]),
-    parseInt(match[3]),
-  );
-  return toCalendar(greg, calendar);
-}
-
-function getTimeZone() {
+  const year = parseInt(match[1]);
+  const month = parseInt(match[2]);
+  const day = parseInt(match[3]);
+  // Reject obviously invalid values before construction
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return null;
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const greg = new CalendarDate(year, month, day);
+    // CalendarDate clamps invalid values instead of throwing —
+    // detect clamping by comparing input vs result
+    if (greg.year !== year || greg.month !== month || greg.day !== day) return null;
+    return toCalendar(greg, calendar);
   } catch {
-    return 'UTC';
+    return null;
   }
 }
+

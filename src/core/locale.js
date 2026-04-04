@@ -31,17 +31,26 @@ const CALENDAR_MAP = {
   roc: () => new TaiwanCalendar(),
 };
 
+const calendarCache = new Map();
+
 /**
- * Create a calendar instance from a string identifier.
- * "islamic" maps to IslamicUmalquraCalendar (not createCalendar which falls back to Gregorian).
+ * Create (or return cached) calendar instance from a string identifier.
+ * Calendar instances are stateless/immutable, so caching is safe.
  */
 export function getCalendar(identifier) {
+  const cached = calendarCache.get(identifier);
+  if (cached) return cached;
+
   const factory = CALENDAR_MAP[identifier];
   if (!factory) {
     console.warn(`Unknown calendar "${identifier}", falling back to gregory`);
-    return new GregorianCalendar();
+    const fallback = new GregorianCalendar();
+    calendarCache.set(identifier, fallback);
+    return fallback;
   }
-  return factory();
+  const instance = factory();
+  calendarCache.set(identifier, instance);
+  return instance;
 }
 
 export const SUPPORTED_CALENDARS = Object.keys(CALENDAR_MAP);

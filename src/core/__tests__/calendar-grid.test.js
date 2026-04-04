@@ -96,4 +96,10 @@ describe('getMonthCount', () => {
     // 5785 is not a leap year
     expect(getMonthCount(cal, 5785)).toBe(12);
   });
+
+  it('returns 13 for Ethiopic calendar', () => {
+    const cal = getCalendar('ethiopic');
+    // Ethiopic always has 13 months (Pagume is the 13th)
+    expect(getMonthCount(cal, 2016)).toBe(13);
+  });
 });

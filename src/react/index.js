@@ -6,8 +6,10 @@ import '../intl-datepicker.js';
 const BOOLEAN_ATTRS = ['inline', 'disabled', 'readonly', 'required', 'show-alternate'];
 const STRING_ATTRS = [
   'calendar', 'locale', 'value', 'type', 'min', 'max',
-  'for', 'placeholder', 'name', 'min-range', 'max-range',
+  'for', 'placeholder', 'name',
 ];
+
+const toCamel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
   const elRef = useRef(null);
@@ -53,13 +55,13 @@ const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
 
   const attrs = {};
   for (const attr of STRING_ATTRS) {
-    const camel = attr.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    const camel = toCamel(attr);
     if (props[camel] !== undefined && props[camel] !== null) {
       attrs[attr] = String(props[camel]);
     }
   }
   for (const attr of BOOLEAN_ATTRS) {
-    const camel = attr.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    const camel = toCamel(attr);
     if (props[camel]) {
       attrs[attr] = '';
     }
@@ -77,7 +79,7 @@ const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
 
     // Remove attrs no longer present
     for (const attr of [...STRING_ATTRS, ...BOOLEAN_ATTRS]) {
-      const camel = attr.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      const camel = toCamel(attr);
       if (props[camel] === undefined || props[camel] === null || props[camel] === false) {
         el.removeAttribute(attr);
       }

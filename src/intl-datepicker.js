@@ -1,6 +1,7 @@
-import { isSameDay, toCalendar, today, CalendarDate, startOfWeek, endOfWeek } from '@internationalized/date';
+import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek } from '@internationalized/date';
 import { styles, calendarIcon, clearIcon } from './styles.js';
-import { getCalendar, resolveLocale, isRTL, getWeekdayNames } from './core/locale.js';
+import { resolveLocale, isRTL, getWeekdayNames } from './core/locale.js';
+import { calendarDateToNative, resolveIntlCalendar, getTimeZone } from './utils/common.js';
 import {
   createState, updateState, selectDate, moveFocus,
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
@@ -8,11 +9,25 @@ import {
 import { generateMonthGrid } from './core/calendar-grid.js';
 import { renderHeader, renderYearGrid, renderMonthGrid as renderMonthPicker } from './core/calendar-header.js';
 import { formatDateShort, formatRange, formatMonthYear, getGregorianEquivalent } from './utils/format.js';
-import { positionCalendar, destroyPositioning } from './core/positioning.js';
+import { positionCalendar } from './core/positioning.js';
 import { parseInput } from './core/date-input.js';
 
 // Track the currently open instance to close others
 let openInstance = null;
+
+const FOOTER_LABELS = {
+  en: { today: 'Today', clear: 'Clear' },
+  fa: { today: 'امروز', clear: 'پاک کردن' },
+  ar: { today: 'اليوم', clear: 'مسح' },
+  he: { today: 'היום', clear: 'נקה' },
+  de: { today: 'Heute', clear: 'Löschen' },
+  fr: { today: "Aujourd'hui", clear: 'Effacer' },
+  ja: { today: '今日', clear: 'クリア' },
+  zh: { today: '今天', clear: '清除' },
+  ko: { today: '오늘', clear: '지우기' },
+  hi: { today: 'आज', clear: 'साफ़ करें' },
+  th: { today: 'วันนี้', clear: 'ล้าง' },
+};
 
 class IntlDatepicker extends HTMLElement {
   static formAssociated = true;
@@ -22,7 +37,6 @@ class IntlDatepicker extends HTMLElement {
       'calendar', 'locale', 'value', 'type', 'min', 'max',
       'for', 'inline', 'disabled', 'readonly', 'required',
       'placeholder', 'show-alternate', 'name',
-      'min-range', 'max-range',
     ];
   }
 
@@ -41,8 +55,11 @@ class IntlDatepicker extends HTMLElement {
     this._view = 'days'; // 'days' | 'months' | 'years'
     this._externalInput = null;
     this._slottedInput = null;
+    this._positionCleanup = null;
     this._boundClose = this._onOutsideClick.bind(this);
     this._boundKeydown = this._onDocumentKeydown.bind(this);
+    this._boundExternalClick = null;
+    this._boundExternalFocus = null;
   }
 
   connectedCallback() {
@@ -52,13 +69,12 @@ class IntlDatepicker extends HTMLElement {
     this._setupExternalInput();
     this._updateFormValue();
 
-    if (this._state._isRTL) {
-      this.setAttribute('dir', 'rtl');
-    }
+    this._updateDir();
   }
 
   disconnectedCallback() {
-    destroyPositioning();
+    this._destroyPositioning();
+    this._cleanupExternalInput();
     document.removeEventListener('click', this._boundClose);
     document.removeEventListener('keydown', this._boundKeydown);
     if (openInstance === this) openInstance = null;
@@ -74,6 +90,7 @@ class IntlDatepicker extends HTMLElement {
       case 'min':
       case 'max':
         this._initState();
+        this._updateDir();
         this._render();
         this._updateFormValue();
         break;
@@ -136,7 +153,19 @@ class IntlDatepicker extends HTMLElement {
 
   getValue() {
     if (!this._state?.selectedDate && !this._state?.rangeStart) return null;
-    const date = this._state.selectedDate || this._state.rangeStart;
+
+    if (this._state.type === 'range' && this._state.rangeStart) {
+      const s = this._state.rangeStart;
+      const e = this._state.rangeEnd;
+      return {
+        iso: e ? `${toISO(s)}/${toISO(e)}` : toISO(s),
+        rangeStart: { year: s.year, month: s.month, day: s.day },
+        rangeEnd: e ? { year: e.year, month: e.month, day: e.day } : null,
+        formatted: this.displayValue,
+      };
+    }
+
+    const date = this._state.selectedDate;
     return {
       iso: toISO(date),
       calendar: { year: date.year, month: date.month, day: date.day },
@@ -213,6 +242,14 @@ class IntlDatepicker extends HTMLElement {
     });
 
     this._state._isRTL = isRTL(locale);
+
+    // Cache formatters that depend on locale/calendar (avoid re-creation per cell)
+    const intlCal = resolveIntlCalendar(calendarId);
+    this._dayLabelFormatter = new Intl.DateTimeFormat(locale, {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      calendar: intlCal,
+    });
+    this._dayNumberFormatter = new Intl.NumberFormat(locale, { useGrouping: false });
   }
 
   _setValue(isoValue, emitEvent) {
@@ -227,20 +264,24 @@ class IntlDatepicker extends HTMLElement {
       });
     } else if (this._state.type === 'range' && isoValue.includes('/')) {
       const [startIso, endIso] = isoValue.split('/');
+      const start = parseISOToCalendar(startIso, calendar);
+      const end = parseISOToCalendar(endIso, calendar);
+      if (!start || !end) return;
+      if (isDateDisabled(this._state, start) || isDateDisabled(this._state, end)) return;
       this._state = updateState(this._state, {
-        rangeStart: parseISOToCalendar(startIso, calendar),
-        rangeEnd: parseISOToCalendar(endIso, calendar),
+        rangeStart: start,
+        rangeEnd: end,
       });
     } else {
       const date = parseISOToCalendar(isoValue, calendar);
-      if (date) {
-        this._state = updateState(this._state, {
-          selectedDate: date,
-          focusedDate: date,
-          viewYear: date.year,
-          viewMonth: date.month,
-        });
-      }
+      if (!date) return;
+      if (isDateDisabled(this._state, date)) return;
+      this._state = updateState(this._state, {
+        selectedDate: date,
+        focusedDate: date,
+        viewYear: date.year,
+        viewMonth: date.month,
+      });
     }
 
     this._render();
@@ -257,37 +298,30 @@ class IntlDatepicker extends HTMLElement {
     const val = this.value;
     this._internals.setFormValue(val || null);
 
+    const anchor = this.shadowRoot.querySelector('.idp-input');
+
     if (this.hasAttribute('required') && !val) {
-      this._internals.setValidity(
-        { valueMissing: true },
-        'Please select a date',
-        this.shadowRoot.querySelector('.idp-input'),
-      );
-    } else if (this.getAttribute('min') && val) {
+      this._internals.setValidity({ valueMissing: true }, 'Please select a date', anchor);
+      return;
+    }
+
+    if (val && this.getAttribute('min')) {
       const min = this.getAttribute('min');
       if (val < min) {
-        this._internals.setValidity(
-          { rangeUnderflow: true },
-          `Date must be ${min} or later`,
-          this.shadowRoot.querySelector('.idp-input'),
-        );
-      } else {
-        this._internals.setValidity({});
+        this._internals.setValidity({ rangeUnderflow: true }, `Date must be ${min} or later`, anchor);
+        return;
       }
-    } else if (this.getAttribute('max') && val) {
+    }
+
+    if (val && this.getAttribute('max')) {
       const max = this.getAttribute('max');
       if (val > max) {
-        this._internals.setValidity(
-          { rangeOverflow: true },
-          `Date must be ${max} or earlier`,
-          this.shadowRoot.querySelector('.idp-input'),
-        );
-      } else {
-        this._internals.setValidity({});
+        this._internals.setValidity({ rangeOverflow: true }, `Date must be ${max} or earlier`, anchor);
+        return;
       }
-    } else {
-      this._internals.setValidity({});
     }
+
+    this._internals.setValidity({});
   }
 
   _render() {
@@ -353,11 +387,13 @@ class IntlDatepicker extends HTMLElement {
       inner += this._renderDayGrid();
     }
 
-    // Footer
+    // Footer with localized labels
+    const todayLabel = this._getLocalizedLabel('today');
+    const clearLabel = this._getLocalizedLabel('clear');
     inner += `
       <div class="idp-footer">
-        <button class="idp-footer-btn" data-action="today" type="button">Today</button>
-        <button class="idp-footer-btn" data-action="clear" type="button">Clear</button>
+        <button class="idp-footer-btn" data-action="today" type="button">${todayLabel}</button>
+        <button class="idp-footer-btn" data-action="clear" type="button">${clearLabel}</button>
       </div>
     `;
 
@@ -410,7 +446,7 @@ class IntlDatepicker extends HTMLElement {
           data-month="${cell.date.month}"
           data-day="${cell.date.day}"
           type="button"
-        >${cell.day}</button>`;
+        >${this._formatDayNumber(cell.day)}</button>`;
       }
       html += '</div>';
     }
@@ -430,7 +466,6 @@ class IntlDatepicker extends HTMLElement {
     calendarEl.innerHTML = `<div aria-live="polite" class="idp-sr-only" id="idp-live"></div>${inner}`;
     if (hidden) calendarEl.setAttribute('hidden', '');
 
-    this._bindCalendarEvents();
     this._announceMonth();
   }
 
@@ -453,22 +488,43 @@ class IntlDatepicker extends HTMLElement {
       this._handleAction(action, btn);
     });
 
-    // Keyboard on grid
+    // Keyboard on grid / month / year views
     shadow.addEventListener('keydown', (e) => {
-      if (this._view !== 'days') return;
+      if (e.key === 'Tab' && this._state.isOpen && !this._state.inline) {
+        this._handleTabTrap(e);
+        return;
+      }
+
+      if (this._view === 'months') {
+        const monthBtn = e.target.closest('.idp-month-cell');
+        if (monthBtn) this._handleMonthYearKeydown(e, '.idp-month-cell', 'select-month');
+        return;
+      }
+      if (this._view === 'years') {
+        const yearBtn = e.target.closest('.idp-year-cell');
+        if (yearBtn) this._handleMonthYearKeydown(e, '.idp-year-cell', 'select-year');
+        return;
+      }
+
       const dayBtn = e.target.closest('.idp-day');
       if (!dayBtn) return;
       this._handleGridKeydown(e);
     });
 
-    // Range hover preview
+    // Range hover preview — use a single mouseover handler for both
+    // setting and clearing hoveredDate (mouseleave doesn't fire on ShadowRoot)
     if (this._state.type === 'range') {
       shadow.addEventListener('mouseover', (e) => {
+        if (!this._state.rangeStart || this._state.rangeEnd) return;
+
         const dayBtn = e.target.closest('.idp-day');
-        if (!dayBtn || dayBtn.hasAttribute('aria-disabled')) return;
-        if (this._state.rangeStart && !this._state.rangeEnd) {
+        if (dayBtn && !dayBtn.hasAttribute('aria-disabled')) {
           const date = this._dateFromBtn(dayBtn);
           this._state = updateState(this._state, { hoveredDate: date });
+          this._renderCalendarContent();
+        } else if (this._state.hoveredDate) {
+          // Mouse moved off the day grid — clear preview
+          this._state = updateState(this._state, { hoveredDate: null });
           this._renderCalendarContent();
         }
       });
@@ -489,11 +545,6 @@ class IntlDatepicker extends HTMLElement {
         }
       });
     }
-  }
-
-  _bindCalendarEvents() {
-    // Re-bind for newly rendered content (after _renderCalendarContent)
-    // The shadow root delegated listener handles everything
   }
 
   _handleAction(action, btn) {
@@ -577,7 +628,7 @@ class IntlDatepicker extends HTMLElement {
   _selectDate(date) {
     if (!date) return;
     this._state = selectDate(this._state, date);
-    this._render();
+    this._renderSafe();
     this._updateFormValue();
     this._updateExternalInput();
 
@@ -599,8 +650,7 @@ class IntlDatepicker extends HTMLElement {
   }
 
   _selectToday() {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    const todayDate = toCalendar(today(tz), this._state.calendar);
+    const todayDate = toCalendar(today(getTimeZone()), this._state.calendar);
 
     if (isDateDisabled(this._state, todayDate)) return;
 
@@ -671,6 +721,74 @@ class IntlDatepicker extends HTMLElement {
     this._focusCurrentDay();
   }
 
+  _handleMonthYearKeydown(e, cellSelector, actionName) {
+    const cells = Array.from(this.shadowRoot.querySelectorAll(cellSelector));
+    const current = e.target.closest(cellSelector);
+    const idx = cells.indexOf(current);
+    if (idx === -1) return;
+
+    const cols = 4;
+    let next = -1;
+
+    switch (e.key) {
+      case 'ArrowRight':
+        next = this._state._isRTL ? idx - 1 : idx + 1;
+        break;
+      case 'ArrowLeft':
+        next = this._state._isRTL ? idx + 1 : idx - 1;
+        break;
+      case 'ArrowDown':
+        next = idx + cols;
+        break;
+      case 'ArrowUp':
+        next = idx - cols;
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        this._handleAction(actionName, current);
+        return;
+      case 'Escape':
+        e.preventDefault();
+        this._view = 'days';
+        this._renderCalendarContent();
+        this._focusCurrentDay();
+        return;
+      default:
+        return;
+    }
+
+    e.preventDefault();
+    if (next >= 0 && next < cells.length) {
+      cells[next].focus();
+    }
+  }
+
+  _handleTabTrap(e) {
+    const calendar = this.shadowRoot.querySelector('.idp-calendar');
+    if (!calendar) return;
+
+    const focusable = Array.from(
+      calendar.querySelectorAll('button:not([disabled]):not([hidden]), [tabindex="0"]'),
+    );
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey) {
+      if (e.target === first || !calendar.contains(e.target)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (e.target === last || !calendar.contains(e.target)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
   _focusCurrentDay() {
     requestAnimationFrame(() => {
       const focused = this.shadowRoot.querySelector('.idp-day[tabindex="0"]');
@@ -695,7 +813,8 @@ class IntlDatepicker extends HTMLElement {
     const calendar = this.shadowRoot.querySelector('.idp-calendar');
 
     if (trigger && calendar) {
-      positionCalendar(trigger, calendar);
+      this._destroyPositioning();
+      this._positionCleanup = positionCalendar(trigger, calendar);
     }
 
     document.addEventListener('click', this._boundClose);
@@ -709,7 +828,7 @@ class IntlDatepicker extends HTMLElement {
     if (!this._state.isOpen) return;
 
     this._state = updateState(this._state, { isOpen: false });
-    destroyPositioning();
+    this._destroyPositioning();
 
     const calendar = this.shadowRoot.querySelector('.idp-calendar');
     if (calendar) {
@@ -744,7 +863,18 @@ class IntlDatepicker extends HTMLElement {
     }
   }
 
+  _cleanupExternalInput() {
+    if (this._externalInput && this._boundExternalClick) {
+      this._externalInput.removeEventListener('click', this._boundExternalClick);
+      this._externalInput.removeEventListener('focus', this._boundExternalFocus);
+    }
+    this._boundExternalClick = null;
+    this._boundExternalFocus = null;
+  }
+
   _setupExternalInput() {
+    this._cleanupExternalInput();
+
     const forId = this.getAttribute('for');
     if (!forId) {
       this._externalInput = null;
@@ -755,16 +885,18 @@ class IntlDatepicker extends HTMLElement {
     if (!input) return;
 
     this._externalInput = input;
-    input.addEventListener('click', () => {
+    this._boundExternalClick = () => {
       if (!this.hasAttribute('disabled')) {
         this._state.isOpen ? this._closeCalendar() : this._openCalendar();
       }
-    });
-    input.addEventListener('focus', () => {
+    };
+    this._boundExternalFocus = () => {
       if (!this.hasAttribute('disabled') && !this._state.isOpen) {
         this._openCalendar();
       }
-    });
+    };
+    input.addEventListener('click', this._boundExternalClick);
+    input.addEventListener('focus', this._boundExternalFocus);
 
     // If the external input has a value, try to parse it
     if (input.value && !this.getAttribute('value')) {
@@ -800,18 +932,50 @@ class IntlDatepicker extends HTMLElement {
 
   _formatDayLabel(date) {
     try {
-      const intlCal = this._state.calendarId === 'islamic' ? 'islamic-umalqura' : this._state.calendarId;
-      const formatter = new Intl.DateTimeFormat(this._state.locale, {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        calendar: intlCal,
-      });
-      const greg = toCalendar(date, getCalendar('gregory'));
-      return formatter.format(new Date(greg.year, greg.month - 1, greg.day));
+      return this._dayLabelFormatter.format(calendarDateToNative(date));
     } catch {
       return `${date.day}`;
+    }
+  }
+
+  _renderSafe() {
+    if (this._state.isOpen) {
+      // Preserve the calendar DOM element to keep floating-ui positioning alive
+      this._renderCalendarContent();
+      // Also update the input display
+      const input = this.shadowRoot.querySelector('.idp-input');
+      if (input) input.value = this.displayValue;
+    } else {
+      this._render();
+    }
+  }
+
+  _updateDir() {
+    if (this._state?._isRTL) {
+      this.setAttribute('dir', 'rtl');
+    } else {
+      this.removeAttribute('dir');
+    }
+  }
+
+  _formatDayNumber(day) {
+    try {
+      return this._dayNumberFormatter.format(day);
+    } catch {
+      return String(day);
+    }
+  }
+
+  _getLocalizedLabel(key) {
+    const lang = (this._state?.locale || 'en').split('-')[0];
+    const set = FOOTER_LABELS[lang] || FOOTER_LABELS.en;
+    return set[key] || FOOTER_LABELS.en[key];
+  }
+
+  _destroyPositioning() {
+    if (this._positionCleanup) {
+      this._positionCleanup();
+      this._positionCleanup = null;
     }
   }
 

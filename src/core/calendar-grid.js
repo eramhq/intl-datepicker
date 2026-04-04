@@ -9,6 +9,7 @@ import {
 } from '@internationalized/date';
 import { getCalendar } from './locale.js';
 import { isDateDisabled, isInRange, isRangeEdge } from './state.js';
+import { calendarDateToNative, resolveIntlCalendar, getTimeZone } from '../utils/common.js';
 
 /**
  * Generate a complete month grid for any calendar/locale.
@@ -80,39 +81,20 @@ export function getMonthCount(calendar, year) {
 export function getMonthOptions(calendarId, year, locale) {
   const calendar = typeof calendarId === 'string' ? getCalendar(calendarId) : calendarId;
   const count = getMonthCount(calendar, year);
+  const formatter = new Intl.DateTimeFormat(locale, {
+    month: 'long',
+    calendar: resolveIntlCalendar(calendarId),
+  });
   const months = [];
 
   for (let m = 1; m <= count; m++) {
     const date = new CalendarDate(calendar, year, m, 1);
-    const formatter = new Intl.DateTimeFormat(locale, {
-      month: 'long',
-      calendar: getIntlCalendarId(calendarId),
-    });
-    // Format using a native Date converted from the calendar date
-    const nativeDate = calendarDateToNative(date);
     months.push({
       value: m,
-      label: formatter.format(nativeDate),
+      label: formatter.format(calendarDateToNative(date)),
     });
   }
 
   return months;
 }
 
-function calendarDateToNative(calDate) {
-  const greg = toCalendar(calDate, getCalendar('gregory'));
-  return new Date(greg.year, greg.month - 1, greg.day);
-}
-
-function getIntlCalendarId(calendarId) {
-  if (calendarId === 'islamic') return 'islamic-umalqura';
-  return calendarId;
-}
-
-function getTimeZone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return 'UTC';
-  }
-}

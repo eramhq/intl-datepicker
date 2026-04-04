@@ -1,30 +1,18 @@
 import { computePosition, autoUpdate, offset, flip, shift, size } from '@floating-ui/dom';
 
-let cleanup = null;
-
 /**
  * Position the calendar panel relative to the trigger element.
- * Uses Popover API if available, otherwise falls back to floating-ui positioning.
+ * Uses fixed strategy so coordinates are viewport-relative, avoiding
+ * issues with Shadow DOM containing blocks and the Popover API.
+ * Returns a cleanup function for the caller to store per-instance.
  */
 export function positionCalendar(triggerEl, calendarEl, options = {}) {
-  // Clean up previous positioning
-  destroyPositioning();
-
-  const { strategy = 'absolute' } = options;
-
-  // Try Popover API for top-layer rendering
-  if (typeof calendarEl.showPopover === 'function' && !options.skipPopover) {
-    try {
-      calendarEl.setAttribute('popover', 'manual');
-      calendarEl.showPopover();
-    } catch {
-      // Popover not supported or already shown
-    }
-  }
+  const strategy = 'fixed';
 
   calendarEl.style.position = strategy;
+  calendarEl.style.margin = '0';
 
-  cleanup = autoUpdate(triggerEl, calendarEl, () => {
+  const cleanup = autoUpdate(triggerEl, calendarEl, () => {
     computePosition(triggerEl, calendarEl, {
       placement: 'bottom-start',
       strategy,
@@ -48,11 +36,6 @@ export function positionCalendar(triggerEl, calendarEl, options = {}) {
       });
     });
   });
-}
 
-export function destroyPositioning() {
-  if (cleanup) {
-    cleanup();
-    cleanup = null;
-  }
+  return cleanup;
 }

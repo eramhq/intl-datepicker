@@ -78,6 +78,13 @@ describe('selectDate', () => {
     expect(s.rangeStart.day).toBe(10);
     expect(s.rangeEnd.day).toBe(20);
   });
+
+  it('rejects disabled dates via selectDate (Bug 7)', () => {
+    const state = createState({ min: '2024-03-10', max: '2024-03-20' });
+    const disabled = new CalendarDate(2024, 3, 5);
+    const result = selectDate(state, disabled);
+    expect(result.selectedDate).toBeNull();
+  });
 });
 
 describe('moveFocus', () => {
@@ -143,6 +150,17 @@ describe('parseISOToCalendar', () => {
     expect(parseISOToCalendar('', cal)).toBeNull();
     expect(parseISOToCalendar(null, cal)).toBeNull();
   });
+
+  it('returns null for out-of-range month/day (Bug 1)', () => {
+    const cal = getCalendar('gregory');
+    expect(parseISOToCalendar('2024-13-40', cal)).toBeNull();
+    expect(parseISOToCalendar('0000-00-00', cal)).toBeNull();
+  });
+
+  it('returns null for impossible dates like Feb 30 (Bug 1)', () => {
+    const cal = getCalendar('gregory');
+    expect(parseISOToCalendar('2024-02-30', cal)).toBeNull();
+  });
 });
 
 describe('isDateDisabled', () => {
@@ -162,6 +180,18 @@ describe('isDateDisabled', () => {
     const state = createState({ min: '2024-03-10', max: '2024-03-20' });
     const date = new CalendarDate(2024, 3, 15);
     expect(isDateDisabled(state, date)).toBe(false);
+  });
+
+  it('disables dates above max when min is also set (Bug 4)', () => {
+    const state = createState({ min: '2024-03-10', max: '2024-03-20' });
+    const date = new CalendarDate(2024, 3, 25);
+    expect(isDateDisabled(state, date)).toBe(true);
+  });
+
+  it('disables dates below min when max is also set (Bug 4)', () => {
+    const state = createState({ min: '2024-03-10', max: '2024-03-20' });
+    const date = new CalendarDate(2024, 3, 5);
+    expect(isDateDisabled(state, date)).toBe(true);
   });
 });
 
