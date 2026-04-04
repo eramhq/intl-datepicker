@@ -727,7 +727,7 @@ class IntlDatepicker extends HTMLElement {
     const idx = cells.indexOf(current);
     if (idx === -1) return;
 
-    const cols = 4;
+    const cols = this._view === 'months' ? 3 : 4;
     let next = -1;
 
     switch (e.key) {
@@ -833,7 +833,6 @@ class IntlDatepicker extends HTMLElement {
     const calendar = this.shadowRoot.querySelector('.idp-calendar');
     if (calendar) {
       calendar.setAttribute('hidden', '');
-      try { calendar.hidePopover?.(); } catch {}
     }
 
     // Update the input's aria-expanded
@@ -939,14 +938,15 @@ class IntlDatepicker extends HTMLElement {
   }
 
   _renderSafe() {
-    if (this._state.isOpen) {
-      // Preserve the calendar DOM element to keep floating-ui positioning alive
-      this._renderCalendarContent();
-      // Also update the input display
-      const input = this.shadowRoot.querySelector('.idp-input');
-      if (input) input.value = this.displayValue;
-    } else {
-      this._render();
+    this._render();
+    if (this._state.isOpen && !this._state.inline) {
+      // Re-establish positioning on the new calendar DOM element
+      const trigger = this.shadowRoot.querySelector('.idp-input-wrapper') || this._externalInput;
+      const calendar = this.shadowRoot.querySelector('.idp-calendar');
+      if (trigger && calendar) {
+        this._destroyPositioning();
+        this._positionCleanup = positionCalendar(trigger, calendar);
+      }
     }
   }
 
