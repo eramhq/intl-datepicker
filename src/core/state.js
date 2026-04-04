@@ -1,6 +1,6 @@
-import { CalendarDate, toCalendar, today, isSameDay } from '@internationalized/date';
+import { CalendarDate, toCalendar, today, isSameDay, startOfWeek, endOfWeek } from '@internationalized/date';
 import { getCalendar } from './locale.js';
-import { getTimeZone } from '../utils/common.js';
+import { getTimeZone, calendarDateToNative } from '../utils/common.js';
 
 /**
  * Create initial state for the datepicker.
@@ -14,6 +14,10 @@ export function createState(options = {}) {
     min = null,
     max = null,
     inline = false,
+    disabledDates = null,
+    disabledDatesFilter = null,
+    disableWeekends = false,
+    isRTL = false,
   } = options;
 
   const calendar = getCalendar(calendarId);
@@ -22,18 +26,28 @@ export function createState(options = {}) {
   let selectedDate = null;
   let rangeStart = null;
   let rangeEnd = null;
+  let selectedDates = [];
 
   if (value) {
     if (type === 'range' && value.includes('/')) {
       const [startIso, endIso] = value.split('/');
       rangeStart = parseISOToCalendar(startIso, calendar);
       rangeEnd = parseISOToCalendar(endIso, calendar);
+    } else if (type === 'multiple' && value.includes(',')) {
+      selectedDates = value.split(',')
+        .map(s => parseISOToCalendar(s.trim(), calendar))
+        .filter(d => d !== null);
     } else {
       selectedDate = parseISOToCalendar(value, calendar);
     }
   }
 
-  const focusDate = selectedDate || rangeStart || todayDate;
+  let disabledDatesSet = null;
+  if (disabledDates && Array.isArray(disabledDates) && disabledDates.length > 0) {
+    disabledDatesSet = new Set(disabledDates);
+  }
+
+  const focusDate = selectedDate || rangeStart || (selectedDates.length > 0 ? selectedDates[0] : null) || todayDate;
 
   return {
     calendarId,
@@ -41,6 +55,7 @@ export function createState(options = {}) {
     locale,
     type,
     selectedDate,
+    selectedDates,
     rangeStart,
     rangeEnd,
     focusedDate: focusDate,
@@ -51,6 +66,12 @@ export function createState(options = {}) {
     min: min ? parseISOToCalendar(min, calendar) : null,
     max: max ? parseISOToCalendar(max, calendar) : null,
     hoveredDate: null,
+    disabledDatesSet,
+    disabledDatesFilter: disabledDatesFilter || null,
+    disableWeekends,
+    _weekendDays: disableWeekends ? getWeekendDays(locale) : [],
+    _isRTL: isRTL,
+    maxDates: null,
   };
 }
 
@@ -63,6 +84,7 @@ export function updateState(state, changes) {
 
 /**
  * Select a date. For range type, handles start/end logic.
+ * For multiple type, toggles selection.
  */
 export function selectDate(state, date) {
   if (isDateDisabled(state, date)) return state;
@@ -87,6 +109,36 @@ export function selectDate(state, date) {
     });
   }
 
+  if (state.type === 'week') {
+    const weekStart = startOfWeek(date, state.locale);
+    const weekEnd = endOfWeek(date, state.locale);
+    return updateState(state, {
+      rangeStart: weekStart,
+      rangeEnd: weekEnd,
+      focusedDate: date,
+    });
+  }
+
+  if (state.type === 'multiple') {
+    const existing = state.selectedDates || [];
+    const idx = existing.findIndex(d => isSameDay(d, date));
+    let newDates;
+    if (idx >= 0) {
+      // Toggle off
+      newDates = [...existing.slice(0, idx), ...existing.slice(idx + 1)];
+    } else {
+      // Check maxDates limit
+      if (state.maxDates && existing.length >= state.maxDates) {
+        return state;
+      }
+      newDates = [...existing, date];
+    }
+    return updateState(state, {
+      selectedDates: newDates,
+      focusedDate: date,
+    });
+  }
+
   return updateState(state, {
     selectedDate: date,
     focusedDate: date,
@@ -94,19 +146,75 @@ export function selectDate(state, date) {
 }
 
 /**
- * Check if a date is disabled (outside min/max).
+ * Check if a date is disabled (outside min/max, in disabled list, or by filter).
  */
 export function isDateDisabled(state, date) {
   if (state.min && date.compare(state.min) < 0) return true;
   if (state.max && date.compare(state.max) > 0) return true;
+
+  if (state.disabledDatesSet) {
+    const iso = toISO(date);
+    if (state.disabledDatesSet.has(iso)) return true;
+  }
+
+  const needsDayOfWeek = state.disableWeekends || state.disabledDatesFilter;
+  const dayOfWeek = needsDayOfWeek ? getDayOfWeek(date) : -1;
+
+  if (state.disableWeekends) {
+    if (state._weekendDays.includes(dayOfWeek)) return true;
+  }
+
+  if (state.disabledDatesFilter) {
+    try {
+      if (state.disabledDatesFilter({ year: date.year, month: date.month, day: date.day, dayOfWeek })) return true;
+    } catch { /* Don't crash on filter errors */ }
+  }
+
   return false;
+}
+
+/**
+ * Get the day of week (0=Sunday, 1=Monday, ..., 6=Saturday) for a CalendarDate.
+ */
+export function getDayOfWeek(date) {
+  return calendarDateToNative(date).getDay();
+}
+
+/**
+ * Get weekend day numbers for a locale.
+ * Uses Intl.Locale.getWeekInfo().weekend when available, falls back to table.
+ */
+export function getWeekendDays(locale) {
+  try {
+    const loc = new Intl.Locale(locale);
+    let weekend;
+    if (typeof loc.getWeekInfo === 'function') {
+      weekend = loc.getWeekInfo().weekend;
+    } else if (loc.weekInfo) {
+      weekend = loc.weekInfo.weekend;
+    }
+    if (weekend && weekend.length > 0) {
+      // Intl weekend uses 1=Mon..7=Sun, convert to JS 0=Sun..6=Sat
+      return weekend.map(d => d === 7 ? 0 : d);
+    }
+  } catch { /* fallback below */ }
+
+  // Fallback: check language for known weekend patterns
+  const lang = locale.split('-')[0];
+  if (lang === 'fa' || lang === 'ps') {
+    return [5, 6]; // Friday + Saturday
+  }
+  if (locale.startsWith('ar-') || lang === 'ar') {
+    return [5, 6]; // Friday + Saturday for most Arab countries
+  }
+  return [0, 6]; // Saturday + Sunday (default)
 }
 
 /**
  * Check if a date is in the selected range (for range type).
  */
 export function isInRange(state, date) {
-  if (state.type !== 'range') return false;
+  if (state.type !== 'range' && state.type !== 'week') return false;
   const start = state.rangeStart;
   const end = state.rangeEnd || state.hoveredDate;
   if (!start || !end) return false;
@@ -121,7 +229,7 @@ export function isInRange(state, date) {
  * Check if a date is the range start or end.
  */
 export function isRangeEdge(state, date) {
-  if (state.type !== 'range') return { isStart: false, isEnd: false };
+  if (state.type !== 'range' && state.type !== 'week') return { isStart: false, isEnd: false };
   const end = state.rangeEnd || state.hoveredDate;
   return {
     isStart: state.rangeStart && isSameDay(date, state.rangeStart),

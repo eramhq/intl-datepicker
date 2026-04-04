@@ -1,4 +1,4 @@
-import { toCalendar } from '@internationalized/date';
+import { toCalendar, today, CalendarDate } from '@internationalized/date';
 import { getCalendar } from '../core/locale.js';
 
 /**
@@ -17,13 +17,67 @@ export function resolveIntlCalendar(calendarId) {
   return calendarId === 'islamic' ? 'islamic-umalqura' : calendarId;
 }
 
+let _cachedTimeZone = null;
+
 /**
- * Get the user's IANA timezone, with UTC fallback.
+ * Get the user's IANA timezone, with UTC fallback. Cached at module level.
  */
 export function getTimeZone() {
+  if (_cachedTimeZone) return _cachedTimeZone;
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    _cachedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
-    return 'UTC';
+    _cachedTimeZone = 'UTC';
   }
+  return _cachedTimeZone;
+}
+
+/**
+ * Resolve a relative date expression to a CalendarDate.
+ * Expressions: "today", "-Nd"/"+Nd", "monthStart", "monthEnd",
+ * "prevMonthStart", "prevMonthEnd", "yearStart", "yearEnd", or "YYYY-MM-DD".
+ */
+export function resolveRelativeDate(expr, calendar, min, max) {
+  const tz = getTimeZone();
+  const now = toCalendar(today(tz), calendar);
+
+  let result;
+
+  if (expr === 'today') {
+    result = now;
+  } else if (/^[+-]\d+d$/.test(expr)) {
+    const days = parseInt(expr);
+    result = now.add({ days });
+  } else if (expr === 'monthStart') {
+    result = now.set({ day: 1 });
+  } else if (expr === 'monthEnd') {
+    result = now.set({ day: 1 }).add({ months: 1 }).add({ days: -1 });
+  } else if (expr === 'prevMonthStart') {
+    result = now.set({ day: 1 }).add({ months: -1 });
+  } else if (expr === 'prevMonthEnd') {
+    result = now.set({ day: 1 }).add({ days: -1 });
+  } else if (expr === 'yearStart') {
+    result = now.set({ month: 1, day: 1 });
+  } else if (expr === 'yearEnd') {
+    result = now.set({ month: 1, day: 1 }).add({ years: 1 }).add({ days: -1 });
+  } else {
+    // Try absolute ISO date
+    const match = expr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      try {
+        const greg = new CalendarDate(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
+        result = toCalendar(greg, calendar);
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+
+  // Clamp to min/max
+  if (min && result.compare(min) < 0) result = min;
+  if (max && result.compare(max) > 0) result = max;
+
+  return result;
 }

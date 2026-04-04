@@ -126,22 +126,6 @@ export function resolveLocale(explicit) {
 }
 
 /**
- * Get localized month names for a given calendar/locale.
- */
-export function getMonthNames(locale, calendarId, format = 'long') {
-  // Use Intl.DateTimeFormat to get month names
-  const calendar = calendarId === 'islamic' ? 'islamic-umalqura' : calendarId;
-  const formatter = new Intl.DateTimeFormat(`${locale}-u-ca-${calendar}`, { month: format });
-  const months = [];
-  // Use a Gregorian base date and iterate — the formatter will convert
-  for (let m = 0; m < 12; m++) {
-    const date = new Date(2024, m, 15);
-    months.push(formatter.format(date));
-  }
-  return months;
-}
-
-/**
  * Get localized weekday names.
  */
 export function getWeekdayNames(locale, format = 'short') {

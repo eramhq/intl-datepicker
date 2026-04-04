@@ -1,7 +1,7 @@
 import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek } from '@internationalized/date';
-import { styles, calendarIcon, clearIcon } from './styles.js';
+import { styles, calendarIcon, clearIcon, chevronLeft, chevronRight } from './styles.js';
 import { resolveLocale, isRTL, getWeekdayNames } from './core/locale.js';
-import { calendarDateToNative, resolveIntlCalendar, getTimeZone } from './utils/common.js';
+import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelativeDate } from './utils/common.js';
 import {
   createState, updateState, selectDate, moveFocus,
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
@@ -37,6 +37,10 @@ class IntlDatepicker extends HTMLElement {
       'calendar', 'locale', 'value', 'type', 'min', 'max',
       'for', 'inline', 'disabled', 'readonly', 'required',
       'placeholder', 'show-alternate', 'name',
+      'disabled-dates', 'disable-weekends',
+      'date-separator', 'max-dates', 'sort-dates',
+      'months', 'presets', 'no-animation',
+      'show-week-numbers', 'hide-outside-days', 'allow-input',
     ];
   }
 
@@ -89,6 +93,8 @@ class IntlDatepicker extends HTMLElement {
       case 'type':
       case 'min':
       case 'max':
+      case 'disabled-dates':
+      case 'disable-weekends':
         this._initState();
         this._updateDir();
         this._render();
@@ -100,10 +106,24 @@ class IntlDatepicker extends HTMLElement {
       case 'inline':
       case 'disabled':
       case 'readonly':
+      case 'show-week-numbers':
+      case 'hide-outside-days':
+      case 'allow-input':
         this._render();
         break;
       case 'for':
         this._setupExternalInput();
+        break;
+      case 'date-separator':
+      case 'max-dates':
+      case 'sort-dates':
+        this._render();
+        this._updateFormValue();
+        break;
+      case 'months':
+      case 'presets':
+      case 'no-animation':
+        this._render();
         break;
     }
   }
@@ -117,6 +137,23 @@ class IntlDatepicker extends HTMLElement {
       if (s && e) return `${s}/${e}`;
       if (s) return s;
       return '';
+    }
+    if (this._state?.type === 'multiple') {
+      const dates = this._state.selectedDates || [];
+      if (dates.length === 0) return '';
+      return dates.map(d => toISO(d)).join(',');
+    }
+    if (this._state?.type === 'week') {
+      if (!this._state.rangeStart || !this._state.rangeEnd) return '';
+      const { year, week } = this._getISOWeek(this._state.rangeStart);
+      return `${year}-W${String(week).padStart(2, '0')}`;
+    }
+    if (this._state?.type === 'month' && this._state.selectedDate) {
+      const d = this._state.selectedDate;
+      return `${String(d.year).padStart(4, '0')}-${String(d.month).padStart(2, '0')}`;
+    }
+    if (this._state?.type === 'year' && this._state.selectedDate) {
+      return String(this._state.selectedDate.year);
     }
     return toISO(this._state?.selectedDate);
   }
@@ -137,8 +174,20 @@ class IntlDatepicker extends HTMLElement {
 
   get displayValue() {
     if (!this._state) return '';
-    if (this._state.type === 'range') {
+    if (this._state.type === 'range' || this._state.type === 'week') {
       return formatRange(this._state.rangeStart, this._state.rangeEnd, this._state.locale, this._state.calendarId);
+    }
+    if (this._state.type === 'multiple') {
+      const dates = this._state.selectedDates || [];
+      if (dates.length === 0) return '';
+      const sep = this.getAttribute('date-separator') || ', ';
+      return dates.map(d => formatDateShort(d, this._state.locale, this._state.calendarId)).join(sep);
+    }
+    if (this._state.type === 'month' && this._state.selectedDate) {
+      return formatMonthYear(this._state.selectedDate.year, this._state.selectedDate.month, this._state.locale, this._state.calendarId);
+    }
+    if (this._state.type === 'year' && this._state.selectedDate) {
+      return this._formatYearDisplay(this._state.selectedDate.year);
     }
     return formatDateShort(this._state.selectedDate, this._state.locale, this._state.calendarId);
   }
@@ -152,7 +201,35 @@ class IntlDatepicker extends HTMLElement {
   }
 
   getValue() {
+    if (this._state?.type === 'multiple') {
+      const dates = this._state.selectedDates || [];
+      if (dates.length === 0) return null;
+      return {
+        iso: dates.map(d => toISO(d)).join(','),
+        dates: dates.map(d => ({ year: d.year, month: d.month, day: d.day })),
+        formatted: this.displayValue,
+      };
+    }
+
     if (!this._state?.selectedDate && !this._state?.rangeStart) return null;
+
+    if (this._state.type === 'month' && this._state.selectedDate) {
+      const d = this._state.selectedDate;
+      return {
+        iso: `${String(d.year).padStart(4, '0')}-${String(d.month).padStart(2, '0')}`,
+        calendar: { year: d.year, month: d.month },
+        formatted: this.displayValue,
+      };
+    }
+
+    if (this._state.type === 'year' && this._state.selectedDate) {
+      const d = this._state.selectedDate;
+      return {
+        iso: String(d.year),
+        calendar: { year: d.year },
+        formatted: this.displayValue,
+      };
+    }
 
     if (this._state.type === 'range' && this._state.rangeStart) {
       const s = this._state.rangeStart;
@@ -180,6 +257,7 @@ class IntlDatepicker extends HTMLElement {
   clear() {
     this._state = updateState(this._state, {
       selectedDate: null,
+      selectedDates: [],
       rangeStart: null,
       rangeEnd: null,
     });
@@ -203,6 +281,40 @@ class IntlDatepicker extends HTMLElement {
     this._state = goToMonth(this._state, year, month);
     this._view = 'days';
     this._renderCalendarContent();
+  }
+
+  get selectedDates() {
+    return this._state?.selectedDates || [];
+  }
+
+  get mapDays() {
+    return this._mapDays || null;
+  }
+
+  set mapDays(fn) {
+    this._mapDays = typeof fn === 'function' ? fn : null;
+    if (this._state) this._renderCalendarContent();
+  }
+
+  get presets() {
+    return this._presets || null;
+  }
+
+  set presets(val) {
+    this._presets = Array.isArray(val) ? val : null;
+    if (this._state) this._render();
+  }
+
+  get disabledDatesFilter() {
+    return this._disabledDatesFilter || null;
+  }
+
+  set disabledDatesFilter(fn) {
+    this._disabledDatesFilter = typeof fn === 'function' ? fn : null;
+    if (this._state) {
+      this._state = updateState(this._state, { disabledDatesFilter: this._disabledDatesFilter });
+      this._render();
+    }
   }
 
   // --- Form callbacks ---
@@ -231,6 +343,18 @@ class IntlDatepicker extends HTMLElement {
     const calendarId = this.getAttribute('calendar') || 'gregory';
     const locale = resolveLocale(this.getAttribute('locale'));
 
+    // Parse disabled-dates JSON attribute
+    let disabledDates = null;
+    const disabledDatesAttr = this.getAttribute('disabled-dates');
+    if (disabledDatesAttr) {
+      try {
+        disabledDates = JSON.parse(disabledDatesAttr);
+        if (!Array.isArray(disabledDates)) disabledDates = null;
+      } catch {
+        disabledDates = null;
+      }
+    }
+
     this._state = createState({
       calendarId,
       locale,
@@ -239,9 +363,11 @@ class IntlDatepicker extends HTMLElement {
       min: this.getAttribute('min') || null,
       max: this.getAttribute('max') || null,
       inline: this.hasAttribute('inline'),
+      disabledDates,
+      disabledDatesFilter: this._disabledDatesFilter || null,
+      disableWeekends: this.hasAttribute('disable-weekends'),
+      isRTL: isRTL(locale),
     });
-
-    this._state._isRTL = isRTL(locale);
 
     // Cache formatters that depend on locale/calendar (avoid re-creation per cell)
     const intlCal = resolveIntlCalendar(calendarId);
@@ -250,6 +376,16 @@ class IntlDatepicker extends HTMLElement {
       calendar: intlCal,
     });
     this._dayNumberFormatter = new Intl.NumberFormat(locale, { useGrouping: false });
+
+    // Cache parsed presets from attribute
+    this._parsedPresets = null;
+    const presetsAttr = this.getAttribute('presets');
+    if (presetsAttr) {
+      try {
+        const p = JSON.parse(presetsAttr);
+        if (Array.isArray(p)) this._parsedPresets = p;
+      } catch { /* invalid JSON */ }
+    }
   }
 
   _setValue(isoValue, emitEvent) {
@@ -259,9 +395,42 @@ class IntlDatepicker extends HTMLElement {
     if (!isoValue) {
       this._state = updateState(this._state, {
         selectedDate: null,
+        selectedDates: [],
         rangeStart: null,
         rangeEnd: null,
       });
+    } else if (this._state.type === 'multiple') {
+      const dates = isoValue.split(',')
+        .map(s => parseISOToCalendar(s.trim(), calendar))
+        .filter(d => d && !isDateDisabled(this._state, d));
+      this._state = updateState(this._state, { selectedDates: dates });
+    } else if (this._state.type === 'month') {
+      // Parse "YYYY-MM" format
+      const match = isoValue.match(/^(\d{4})-(\d{2})$/);
+      if (match) {
+        const year = parseInt(match[1]);
+        const month = parseInt(match[2]);
+        try {
+          const date = new CalendarDate(this._state.calendar, year, month, 1);
+          this._state = updateState(this._state, {
+            selectedDate: date,
+            viewYear: year,
+            viewMonth: month,
+          });
+        } catch { return; }
+      }
+    } else if (this._state.type === 'year') {
+      // Parse "YYYY" format
+      const year = parseInt(isoValue);
+      if (!isNaN(year)) {
+        try {
+          const date = new CalendarDate(this._state.calendar, year, 1, 1);
+          this._state = updateState(this._state, {
+            selectedDate: date,
+            viewYear: year,
+          });
+        } catch { return; }
+      }
     } else if (this._state.type === 'range' && isoValue.includes('/')) {
       const [startIso, endIso] = isoValue.split('/');
       const start = parseISOToCalendar(startIso, calendar);
@@ -337,13 +506,14 @@ class IntlDatepicker extends HTMLElement {
     let html = '';
 
     // Input section (not shown for `for` mode)
+    const allowInput = this.hasAttribute('allow-input');
     if (!hasFor) {
       html += `
         <div class="idp-input-wrapper" part="input-wrapper">
           <slot name="input">
             <input class="idp-input" part="input"
               type="text"
-              readonly
+              ${!allowInput ? 'readonly' : ''}
               value="${this._escAttr(displayVal)}"
               placeholder="${this._escAttr(placeholder)}"
               ${isDisabled ? 'disabled' : ''}
@@ -361,15 +531,20 @@ class IntlDatepicker extends HTMLElement {
     }
 
     // Calendar panel
+    const presetsHTML = this._renderPresets();
+    const hasPresets = presetsHTML !== '';
     html += `
-      <div class="idp-calendar" part="calendar"
+      <div class="idp-calendar${hasPresets ? ' idp-has-presets' : ''}" part="calendar"
         role="dialog"
         aria-modal="${!isInline}"
         aria-label="Date picker"
         ${!isInline && !this._state.isOpen ? 'hidden' : ''}
       >
-        <div aria-live="polite" class="idp-sr-only" id="idp-live"></div>
-        ${this._renderCalendarInner(showAlternate)}
+        ${presetsHTML}
+        <div class="idp-calendar-main">
+          <div aria-live="polite" class="idp-sr-only" id="idp-live"></div>
+          ${this._renderCalendarInner(showAlternate)}
+        </div>
       </div>
     `;
 
@@ -377,20 +552,46 @@ class IntlDatepicker extends HTMLElement {
   }
 
   _renderCalendarInner(showAlternate) {
-    let inner = renderHeader(this._state, this._view);
+    const monthCount = this._getMonthCount();
 
-    if (this._view === 'years') {
-      inner += renderYearGrid(this._state);
-    } else if (this._view === 'months') {
-      inner += renderMonthPicker(this._state);
-    } else {
-      inner += this._renderDayGrid();
+    if (this._view === 'years' || this._view === 'months' || monthCount <= 1) {
+      let inner = renderHeader(this._state, this._view);
+
+      if (this._view === 'years') {
+        inner += renderYearGrid(this._state);
+      } else if (this._view === 'months') {
+        inner += renderMonthPicker(this._state);
+      } else {
+        inner += this._renderDayGrid();
+      }
+
+      inner += this._renderFooter(showAlternate);
+      return inner;
     }
 
-    // Footer with localized labels
+    // Multi-month view
+    let inner = '<div class="idp-months-container">';
+    for (let i = 0; i < monthCount; i++) {
+      const panelState = this._getOffsetState(i);
+      const headerTitle = formatMonthYear(panelState.viewYear, panelState.viewMonth, panelState.locale, panelState.calendarId);
+      const isFirst = i === 0;
+      const isLast = i === monthCount - 1;
+      const isRTL = this._state._isRTL;
+
+      inner += '<div class="idp-month-panel">';
+      inner += this._renderMultiMonthHeader(headerTitle, isFirst, isLast, isRTL);
+      inner += this._renderDayGrid(panelState);
+      inner += '</div>';
+    }
+    inner += '</div>';
+    inner += this._renderFooter(showAlternate);
+    return inner;
+  }
+
+  _renderFooter(showAlternate) {
     const todayLabel = this._getLocalizedLabel('today');
     const clearLabel = this._getLocalizedLabel('clear');
-    inner += `
+    let html = `
       <div class="idp-footer">
         <button class="idp-footer-btn" data-action="today" type="button">${todayLabel}</button>
         <button class="idp-footer-btn" data-action="clear" type="button">${clearLabel}</button>
@@ -399,54 +600,206 @@ class IntlDatepicker extends HTMLElement {
 
     if (showAlternate && this._state.selectedDate) {
       const alt = getGregorianEquivalent(this._state.selectedDate, this._state.locale);
-      inner += `<div class="idp-alternate" part="alternate">${alt}</div>`;
+      html += `<div class="idp-alternate" part="alternate">${alt}</div>`;
     }
 
-    return inner;
+    return html;
   }
 
-  _renderDayGrid() {
-    const weekdays = getWeekdayNames(this._state.locale, 'narrow');
-    const grid = generateMonthGrid(this._state);
+  _renderPresets() {
+    if (this._state.type !== 'range') return '';
 
-    let html = '<div class="idp-weekdays" role="row">';
+    const presets = this._presets || this._parsedPresets;
+    if (!presets || presets.length === 0) return '';
+
+    // Resolve current range for active highlight
+    const currentStart = this._state.rangeStart ? toISO(this._state.rangeStart) : '';
+    const currentEnd = this._state.rangeEnd ? toISO(this._state.rangeEnd) : '';
+
+    let html = '<div class="idp-presets" part="presets">';
+    for (const preset of presets) {
+      if (!preset.label || !preset.value) continue;
+      // Check if this preset matches current selection
+      let isActive = false;
+      try {
+        const [startExpr, endExpr] = preset.value.split('/');
+        const resolvedStart = resolveRelativeDate(startExpr, this._state.calendar, this._state.min, this._state.max);
+        const resolvedEnd = resolveRelativeDate(endExpr, this._state.calendar, this._state.min, this._state.max);
+        if (resolvedStart && resolvedEnd) {
+          isActive = toISO(resolvedStart) === currentStart && toISO(resolvedEnd) === currentEnd;
+        }
+      } catch { /* ignore */ }
+
+      html += `<button class="idp-preset-btn${isActive ? ' active' : ''}"
+        data-action="apply-preset"
+        data-preset-value="${this._escAttr(preset.value)}"
+        type="button">${this._escAttr(preset.label)}</button>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  _applyPreset(presetValue) {
+    const [startExpr, endExpr] = presetValue.split('/');
+    const start = resolveRelativeDate(startExpr, this._state.calendar, this._state.min, this._state.max);
+    const end = resolveRelativeDate(endExpr, this._state.calendar, this._state.min, this._state.max);
+    if (!start || !end) return;
+
+    this._state = updateState(this._state, {
+      rangeStart: start,
+      rangeEnd: end,
+      viewYear: start.year,
+      viewMonth: start.month,
+    });
+
+    this._renderSafe();
+    this._updateFormValue();
+    this._updateExternalInput();
+
+    const detail = {
+      iso: `${toISO(start)}/${toISO(end)}`,
+      rangeStart: { year: start.year, month: start.month, day: start.day },
+      rangeEnd: { year: end.year, month: end.month, day: end.day },
+      formatted: this.displayValue,
+    };
+    this._emit('intl-select', detail);
+    this._emit('intl-change', detail);
+  }
+
+  _getMonthCount() {
+    const attr = this.getAttribute('months');
+    if (!attr) return 1;
+    const n = parseInt(attr);
+    return isNaN(n) ? 1 : Math.max(1, Math.min(3, n));
+  }
+
+  _getOffsetState(offset) {
+    if (offset === 0) return this._state;
+    const current = new CalendarDate(
+      this._state.calendar,
+      this._state.viewYear,
+      this._state.viewMonth,
+      1,
+    );
+    const next = current.add({ months: offset });
+    return updateState(this._state, {
+      viewYear: next.year,
+      viewMonth: next.month,
+    });
+  }
+
+  _renderMultiMonthHeader(title, isFirst, isLast, isRTL) {
+    const { chevronLeft: chL, chevronRight: chR } = this._getChevrons();
+    const prevBtn = isFirst
+      ? `<button class="idp-nav-btn" data-action="prev-month" aria-label="Previous month" type="button">${isRTL ? chR : chL}</button>`
+      : '<span class="idp-nav-btn" style="visibility:hidden"></span>';
+    const nextBtn = isLast
+      ? `<button class="idp-nav-btn" data-action="next-month" aria-label="Next month" type="button">${isRTL ? chL : chR}</button>`
+      : '<span class="idp-nav-btn" style="visibility:hidden"></span>';
+
+    return `
+      <div class="idp-header" role="group">
+        ${prevBtn}
+        <div class="idp-header-title">
+          <span class="idp-header-btn">${title}</span>
+        </div>
+        ${nextBtn}
+      </div>
+    `;
+  }
+
+  _getChevrons() {
+    return { chevronLeft, chevronRight };
+  }
+
+  _renderDayGrid(overrideState) {
+    const state = overrideState || this._state;
+    const weekdays = getWeekdayNames(state.locale, 'narrow');
+    const grid = generateMonthGrid(state);
+    const showWeekNumbers = this.hasAttribute('show-week-numbers');
+    const hideOutsideDays = this.hasAttribute('hide-outside-days');
+    const cols = showWeekNumbers ? 8 : 7;
+
+    let html = `<div class="idp-weekdays${showWeekNumbers ? ' idp-has-week-numbers' : ''}" role="row" style="grid-template-columns:repeat(${cols},1fr)">`;
+    if (showWeekNumbers) {
+      html += '<div class="idp-weekday idp-week-number-header" role="columnheader">#</div>';
+    }
     for (const wd of weekdays) {
       html += `<div class="idp-weekday" role="columnheader">${wd}</div>`;
     }
     html += '</div>';
 
-    html += '<div class="idp-days" role="grid" aria-label="Calendar">';
+    html += `<div class="idp-days" role="grid" aria-label="Calendar" style="grid-template-columns:repeat(${cols},1fr)">`;
+
+    const mapDaysFn = this._mapDays;
 
     for (const week of grid) {
       html += '<div role="row" style="display:contents">';
+      if (showWeekNumbers) {
+        const weekNum = this._getWeekNumber(week[0].date);
+        html += `<span class="idp-week-number" aria-hidden="true">${weekNum}</span>`;
+      }
       for (const cell of week) {
+        // Call mapDays if set
+        let mapped = null;
+        if (mapDaysFn) {
+          try {
+            mapped = mapDaysFn({
+              date: { year: cell.date.year, month: cell.date.month, day: cell.date.day, dayOfWeek: calendarDateToNative(cell.date).getDay() },
+              isToday: cell.isToday,
+              isSelected: cell.isSelected,
+              isDisabled: cell.disabled,
+              isInRange: cell.inRange,
+              isRangeStart: cell.isRangeStart,
+              isRangeEnd: cell.isRangeEnd,
+              isCurrentMonth: cell.isCurrentMonth,
+            });
+          } catch {
+            mapped = null;
+          }
+        }
+        if (mapped === undefined || mapped === null) mapped = {};
+
+        // mapDays can force-disable
+        const isDisabled = cell.disabled || mapped.disabled === true;
+        const isHidden = mapped.hidden === true;
+
+        if (isHidden || (hideOutsideDays && !cell.isCurrentMonth)) {
+          html += '<span class="idp-day" style="visibility:hidden"></span>';
+          continue;
+        }
+
         const classes = ['idp-day'];
         if (!cell.isCurrentMonth) classes.push('outside');
         if (cell.isToday) classes.push('today');
         if (cell.isSelected) classes.push('selected');
-        if (cell.disabled) classes.push('disabled');
+        if (isDisabled) classes.push('disabled');
         if (cell.inRange) classes.push('in-range');
         if (cell.isRangeStart) classes.push('range-start');
         if (cell.isRangeEnd) classes.push('range-end');
+        if (mapped.className) classes.push(mapped.className);
 
         const tabIdx = cell.isFocused ? '0' : '-1';
         const ariaSelected = cell.isSelected || cell.isRangeStart || cell.isRangeEnd ? 'true' : 'false';
 
         // Format the accessible label
         const label = this._formatDayLabel(cell.date);
+        const styleAttr = mapped.style ? ` style="${mapped.style}"` : '';
+        const titleAttr = mapped.title ? ` title="${this._escAttr(mapped.title)}"` : '';
+        const content = mapped.content || '';
 
-        html += `<button class="${classes.join(' ')}"
+        html += `<button class="${classes.join(' ')}" part="day"
           role="gridcell"
           tabindex="${tabIdx}"
           aria-selected="${ariaSelected}"
-          ${cell.disabled ? 'aria-disabled="true"' : ''}
+          ${isDisabled ? 'aria-disabled="true"' : ''}
           aria-label="${label}"
           data-action="select-day"
           data-year="${cell.date.year}"
           data-month="${cell.date.month}"
           data-day="${cell.date.day}"
-          type="button"
-        >${this._formatDayNumber(cell.day)}</button>`;
+          type="button"${styleAttr}${titleAttr}
+        >${this._formatDayNumber(cell.day)}${content}</button>`;
       }
       html += '</div>';
     }
@@ -488,6 +841,19 @@ class IntlDatepicker extends HTMLElement {
       this._handleAction(action, btn);
     });
 
+    // Handle direct input blur (allow-input mode)
+    shadow.addEventListener('blur', (e) => {
+      if (!this.hasAttribute('allow-input')) return;
+      const input = e.target.closest('.idp-input');
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+      const parsed = parseInput(text, this._state.calendarId, this._state.locale);
+      if (parsed && !isDateDisabled(this._state, parsed)) {
+        this._selectDate(parsed);
+      }
+    }, true);
+
     // Keyboard on grid / month / year views
     shadow.addEventListener('keydown', (e) => {
       if (e.key === 'Tab' && this._state.isOpen && !this._state.inline) {
@@ -513,8 +879,9 @@ class IntlDatepicker extends HTMLElement {
 
     // Range hover preview — use a single mouseover handler for both
     // setting and clearing hoveredDate (mouseleave doesn't fire on ShadowRoot)
-    if (this._state.type === 'range') {
+    if (this._state.type === 'range' || this._state.type === 'week') {
       shadow.addEventListener('mouseover', (e) => {
+        if (this._state.type === 'week') return; // Week selects full week on click
         if (!this._state.rangeStart || this._state.rangeEnd) return;
 
         const dayBtn = e.target.closest('.idp-day');
@@ -577,16 +944,44 @@ class IntlDatepicker extends HTMLElement {
         break;
       case 'select-year': {
         const year = parseInt(btn.dataset.year);
-        this._state = updateState(this._state, { viewYear: year });
-        this._view = 'months';
-        this._renderCalendarContent();
+        if (this._state.type === 'year') {
+          // Year-only mode: select and close
+          this._state = updateState(this._state, { viewYear: year, selectedDate: new CalendarDate(this._state.calendar, year, 1, 1) });
+          this._render();
+          this._updateFormValue();
+          this._updateExternalInput();
+          const detail = { iso: String(year), calendar: { year }, formatted: this._formatYearDisplay(year) };
+          this._emit('intl-select', detail);
+          this._emit('intl-change', detail);
+          if (!this._state.inline) setTimeout(() => this._closeCalendar(), 150);
+        } else {
+          this._state = updateState(this._state, { viewYear: year });
+          this._view = 'months';
+          this._renderCalendarContent();
+        }
         break;
       }
       case 'select-month': {
         const month = parseInt(btn.dataset.month);
-        this._state = goToMonth(this._state, this._state.viewYear, month);
-        this._view = 'days';
-        this._renderCalendarContent();
+        if (this._state.type === 'month') {
+          // Month-only mode: select and close
+          this._state = updateState(this._state, {
+            viewMonth: month,
+            selectedDate: new CalendarDate(this._state.calendar, this._state.viewYear, month, 1),
+          });
+          this._render();
+          this._updateFormValue();
+          this._updateExternalInput();
+          const isoMonth = `${String(this._state.viewYear).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+          const detail = { iso: isoMonth, calendar: { year: this._state.viewYear, month }, formatted: this.displayValue };
+          this._emit('intl-select', detail);
+          this._emit('intl-change', detail);
+          if (!this._state.inline) setTimeout(() => this._closeCalendar(), 150);
+        } else {
+          this._state = goToMonth(this._state, this._state.viewYear, month);
+          this._view = 'days';
+          this._renderCalendarContent();
+        }
         break;
       }
       case 'select-day': {
@@ -596,6 +991,9 @@ class IntlDatepicker extends HTMLElement {
       }
       case 'today':
         this._selectToday();
+        break;
+      case 'apply-preset':
+        this._applyPreset(btn.dataset.presetValue);
         break;
       case 'clear':
         this.clear();
@@ -640,8 +1038,15 @@ class IntlDatepicker extends HTMLElement {
     this._emit('intl-select', detail);
     this._emit('intl-change', detail);
 
-    // Close on single date selection (not range start)
-    if (this._state.type !== 'range' || this._state.rangeEnd) {
+    // Close on single date selection (not range start, not multiple mode)
+    if (this._state.type === 'multiple') {
+      // Stay open for multi-select
+    } else if (this._state.type === 'week') {
+      // Week mode always completes (rangeStart + rangeEnd set at once)
+      if (!this._state.inline) {
+        setTimeout(() => this._closeCalendar(), 150);
+      }
+    } else if (this._state.type !== 'range' || this._state.rangeEnd) {
       if (!this._state.inline) {
         // Small delay for visual feedback
         setTimeout(() => this._closeCalendar(), 150);
@@ -750,9 +1155,13 @@ class IntlDatepicker extends HTMLElement {
         return;
       case 'Escape':
         e.preventDefault();
-        this._view = 'days';
-        this._renderCalendarContent();
-        this._focusCurrentDay();
+        if (this._state.type === 'month' || this._state.type === 'year') {
+          this._closeCalendar();
+        } else {
+          this._view = 'days';
+          this._renderCalendarContent();
+          this._focusCurrentDay();
+        }
         return;
       default:
         return;
@@ -796,8 +1205,23 @@ class IntlDatepicker extends HTMLElement {
     });
   }
 
+  _shouldAnimate() {
+    return !this.hasAttribute('no-animation') && !this.hasAttribute('inline');
+  }
+
   _openCalendar() {
     if (this._state.isOpen) return;
+
+    // Dispatch cancelable intl-open event
+    const openEvent = new CustomEvent('intl-open', { bubbles: true, composed: true, cancelable: true });
+    if (!this.dispatchEvent(openEvent)) return;
+
+    // Cancel any in-progress close animation
+    if (this._animatingClose) {
+      this._animatingClose = false;
+      const cal = this.shadowRoot.querySelector('.idp-calendar');
+      if (cal) cal.classList.remove('idp-animating-out');
+    }
 
     // Close other open instances
     if (openInstance && openInstance !== this) {
@@ -806,7 +1230,14 @@ class IntlDatepicker extends HTMLElement {
     openInstance = this;
 
     this._state = updateState(this._state, { isOpen: true });
-    this._view = 'days';
+    // Set initial view based on type
+    if (this._state.type === 'month') {
+      this._view = 'months';
+    } else if (this._state.type === 'year') {
+      this._view = 'years';
+    } else {
+      this._view = 'days';
+    }
     this._render();
 
     const trigger = this.shadowRoot.querySelector('.idp-input-wrapper') || this._externalInput;
@@ -815,6 +1246,16 @@ class IntlDatepicker extends HTMLElement {
     if (trigger && calendar) {
       this._destroyPositioning();
       this._positionCleanup = positionCalendar(trigger, calendar);
+    }
+
+    // Animate open
+    if (this._shouldAnimate() && calendar) {
+      calendar.classList.add('idp-animating-in');
+      const onEnd = () => {
+        calendar.classList.remove('idp-animating-in');
+        calendar.removeEventListener('animationend', onEnd);
+      };
+      calendar.addEventListener('animationend', onEnd);
     }
 
     document.addEventListener('click', this._boundClose);
@@ -827,12 +1268,28 @@ class IntlDatepicker extends HTMLElement {
   _closeCalendar() {
     if (!this._state.isOpen) return;
 
+    // Dispatch cancelable intl-close event
+    const closeEvent = new CustomEvent('intl-close', { bubbles: true, composed: true, cancelable: true });
+    if (!this.dispatchEvent(closeEvent)) return;
+
     this._state = updateState(this._state, { isOpen: false });
-    this._destroyPositioning();
 
     const calendar = this.shadowRoot.querySelector('.idp-calendar');
-    if (calendar) {
-      calendar.setAttribute('hidden', '');
+
+    if (this._shouldAnimate() && calendar) {
+      this._animatingClose = true;
+      calendar.classList.add('idp-animating-out');
+      const onEnd = () => {
+        calendar.removeEventListener('animationend', onEnd);
+        this._animatingClose = false;
+        calendar.classList.remove('idp-animating-out');
+        calendar.setAttribute('hidden', '');
+        this._destroyPositioning();
+      };
+      calendar.addEventListener('animationend', onEnd);
+    } else {
+      if (calendar) calendar.setAttribute('hidden', '');
+      this._destroyPositioning();
     }
 
     // Update the input's aria-expanded
@@ -955,6 +1412,37 @@ class IntlDatepicker extends HTMLElement {
       this.setAttribute('dir', 'rtl');
     } else {
       this.removeAttribute('dir');
+    }
+  }
+
+  _getISOWeek(date) {
+    try {
+      const native = calendarDateToNative(date);
+      const d = new Date(Date.UTC(native.getFullYear(), native.getMonth(), native.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return { year: d.getUTCFullYear(), week: Math.ceil(((d - yearStart) / 86400000 + 1) / 7) };
+    } catch {
+      return { year: 0, week: 0 };
+    }
+  }
+
+  _getWeekNumber(date) {
+    return this._getISOWeek(date).week;
+  }
+
+  _formatYearDisplay(year) {
+    try {
+      const date = new CalendarDate(this._state.calendar, year, 1, 1);
+      const intlCal = resolveIntlCalendar(this._state.calendarId);
+      const formatter = new Intl.DateTimeFormat(this._state.locale, {
+        year: 'numeric',
+        calendar: intlCal,
+      });
+      return formatter.format(calendarDateToNative(date));
+    } catch {
+      return String(year);
     }
   }
 

@@ -16,7 +16,7 @@ import { calendarDateToNative, resolveIntlCalendar, getTimeZone } from '../utils
  * Returns an array of weeks, each containing 7 day cells.
  */
 export function generateMonthGrid(state) {
-  const { calendar, viewYear, viewMonth, locale, selectedDate, focusedDate } = state;
+  const { calendar, viewYear, viewMonth, locale, selectedDate, selectedDates, focusedDate } = state;
 
   const firstOfMonth = new CalendarDate(calendar, viewYear, viewMonth, 1);
   const weekStart = startOfWeek(firstOfMonth, locale);
@@ -33,7 +33,11 @@ export function generateMonthGrid(state) {
     for (let d = 0; d < 7; d++) {
       const isCurrentMonth = isSameMonth(current, firstOfMonth);
       const isToday = isSameDay(current, todayDate);
-      const isSelected = selectedDate ? isSameDay(current, selectedDate) : false;
+      const isSelected = selectedDate
+        ? isSameDay(current, selectedDate)
+        : (selectedDates && selectedDates.length > 0)
+          ? selectedDates.some(d => isSameDay(current, d))
+          : false;
       const isFocused = isSameDay(current, focusedDate);
       const disabled = isDateDisabled(state, current);
       const inRange = isInRange(state, current);

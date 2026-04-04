@@ -153,7 +153,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>intl-datepicker <span class="badge">v0.1.0</span></h1>
+    <h1>intl-datepicker <span class="badge">v0.2.0</span></h1>
     <p class="subtitle">Framework-agnostic multi-calendar datepicker Web Component</p>
 
     <!-- 1. Calendar Switching -->
@@ -252,6 +252,111 @@
       ></intl-datepicker>
     </section>
 
+    <!-- 7. Disabled Dates -->
+    <section class="demo-section">
+      <h2>Disabled Dates</h2>
+      <p>Disable specific dates, weekends, or use a custom filter.</p>
+      <div class="demo-row">
+        <div>
+          <p style="font-size:0.8rem;margin-bottom:0.5rem"><strong>Static list</strong> (Dec 25, Dec 31 disabled)</p>
+          <intl-datepicker id="demo7a" calendar="gregory" locale="en-US" placeholder="Holidays disabled"
+            disabled-dates='["2024-12-25","2024-12-31","2025-01-01"]'
+          ></intl-datepicker>
+        </div>
+        <div>
+          <p style="font-size:0.8rem;margin-bottom:0.5rem"><strong>Weekends disabled</strong></p>
+          <intl-datepicker id="demo7b" calendar="gregory" locale="en-US" placeholder="No weekends"
+            disable-weekends
+          ></intl-datepicker>
+        </div>
+        <div>
+          <p style="font-size:0.8rem;margin-bottom:0.5rem"><strong>Custom filter</strong> (odd days only)</p>
+          <intl-datepicker id="demo7c" calendar="gregory" locale="en-US" placeholder="Odd days only"
+          ></intl-datepicker>
+        </div>
+      </div>
+      <div class="output" id="output7">No date selected</div>
+    </section>
+
+    <!-- 8. Multiple Selection -->
+    <section class="demo-section">
+      <h2>Multiple Date Selection</h2>
+      <p>Select multiple dates by clicking. Click again to deselect.</p>
+      <intl-datepicker id="demo8" type="multiple" calendar="gregory" locale="en-US"
+        placeholder="Pick multiple dates..." max-dates="5"
+      ></intl-datepicker>
+      <div class="output" id="output8">No dates selected</div>
+    </section>
+
+    <!-- 9. Month & Year Picker -->
+    <section class="demo-section">
+      <h2>Month & Year Picker</h2>
+      <p>Select just a month or just a year.</p>
+      <div class="demo-row">
+        <intl-datepicker id="demo9a" type="month" calendar="gregory" locale="en-US" placeholder="Select month..."></intl-datepicker>
+        <intl-datepicker id="demo9b" type="year" calendar="gregory" locale="en-US" placeholder="Select year..."></intl-datepicker>
+      </div>
+      <div class="output" id="output9">No selection</div>
+    </section>
+
+    <!-- 10. Custom Day Rendering (mapDays) -->
+    <section class="demo-section">
+      <h2>Custom Day Rendering</h2>
+      <p>Use <code>mapDays</code> to add prices, colors, or badges to days.</p>
+      <intl-datepicker id="demo10" calendar="gregory" locale="en-US" inline></intl-datepicker>
+      <div class="output" id="output10">No date selected</div>
+    </section>
+
+    <!-- 11. Multi-Month View -->
+    <section class="demo-section">
+      <h2>Multi-Month View</h2>
+      <p>Show 2 or 3 months side by side — great for range selection.</p>
+      <intl-datepicker id="demo11" type="range" months="2" calendar="gregory" locale="en-US" inline></intl-datepicker>
+      <div class="output" id="output11">No range selected</div>
+    </section>
+
+    <!-- 12. Range Presets -->
+    <section class="demo-section">
+      <h2>Range Presets</h2>
+      <p>Predefined date ranges for quick selection.</p>
+      <intl-datepicker id="demo12" type="range" calendar="gregory" locale="en-US" inline
+        presets='[
+          {"label":"Today","value":"today/today"},
+          {"label":"Last 7 days","value":"-6d/today"},
+          {"label":"This month","value":"monthStart/monthEnd"},
+          {"label":"Last month","value":"prevMonthStart/prevMonthEnd"},
+          {"label":"This year","value":"yearStart/yearEnd"}
+        ]'
+      ></intl-datepicker>
+      <div class="output" id="output12">No range selected</div>
+    </section>
+
+    <!-- 13. Week Picker -->
+    <section class="demo-section">
+      <h2>Week Picker</h2>
+      <p>Click any day to select the entire week.</p>
+      <intl-datepicker id="demo13" type="week" calendar="gregory" locale="en-US" placeholder="Select a week..."></intl-datepicker>
+      <div class="output" id="output13">No week selected</div>
+    </section>
+
+    <!-- 14. Week Numbers & Hide Outside Days -->
+    <section class="demo-section">
+      <h2>Week Numbers & Options</h2>
+      <p>Show ISO week numbers and hide outside-month days.</p>
+      <div class="demo-row">
+        <intl-datepicker id="demo14a" calendar="gregory" locale="en-US" inline show-week-numbers></intl-datepicker>
+        <intl-datepicker id="demo14b" calendar="gregory" locale="en-US" inline hide-outside-days></intl-datepicker>
+      </div>
+    </section>
+
+    <!-- 15. Allow Direct Input -->
+    <section class="demo-section">
+      <h2>Allow Direct Input</h2>
+      <p>Type a date directly into the input field (YYYY-MM-DD or locale format).</p>
+      <intl-datepicker id="demo15" calendar="gregory" locale="en-US" placeholder="Type a date..." allow-input></intl-datepicker>
+      <div class="output" id="output15">No date selected</div>
+    </section>
+
     <hr>
     <footer>
       <p>Built with <code>&lt;intl-datepicker&gt;</code> — <a href="https://github.com/user/intl-datepicker">GitHub</a></p>
@@ -307,6 +412,77 @@
     });
     maxInput.addEventListener('change', () => {
       demo4.setAttribute('max', maxInput.value);
+    });
+
+    // Demo 7: Disabled dates
+    const demo7c = document.getElementById('demo7c');
+    demo7c.disabledDatesFilter = ({ day }) => day % 2 === 0; // disable even days
+    const output7 = document.getElementById('output7');
+    ['demo7a', 'demo7b', 'demo7c'].forEach(id => {
+      document.getElementById(id).addEventListener('intl-select', (e) => {
+        output7.textContent = JSON.stringify(e.detail, null, 2);
+      });
+    });
+
+    // Demo 8: Multiple selection
+    const demo8 = document.getElementById('demo8');
+    const output8 = document.getElementById('output8');
+    demo8.addEventListener('intl-change', (e) => {
+      output8.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 9: Month/Year picker
+    const output9 = document.getElementById('output9');
+    ['demo9a', 'demo9b'].forEach(id => {
+      document.getElementById(id).addEventListener('intl-change', (e) => {
+        output9.textContent = JSON.stringify(e.detail, null, 2);
+      });
+    });
+
+    // Demo 10: mapDays
+    const demo10 = document.getElementById('demo10');
+    const output10 = document.getElementById('output10');
+    demo10.mapDays = ({ date, isToday }) => {
+      const prices = { 1: '$89', 5: '$120', 10: '$65', 15: '$99', 20: '$75', 25: '$150' };
+      const result = {};
+      if (prices[date.day]) {
+        result.content = `<span style="display:block;font-size:9px;color:#059669;margin-top:-2px">${prices[date.day]}</span>`;
+      }
+      if (date.dayOfWeek === 0 || date.dayOfWeek === 6) {
+        result.style = 'color:#ef4444';
+      }
+      return result;
+    };
+    demo10.addEventListener('intl-select', (e) => {
+      output10.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 11: Multi-month
+    const demo11 = document.getElementById('demo11');
+    const output11 = document.getElementById('output11');
+    demo11.addEventListener('intl-change', (e) => {
+      output11.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 12: Presets
+    const demo12 = document.getElementById('demo12');
+    const output12 = document.getElementById('output12');
+    demo12.addEventListener('intl-change', (e) => {
+      output12.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 13: Week picker
+    const demo13 = document.getElementById('demo13');
+    const output13 = document.getElementById('output13');
+    demo13.addEventListener('intl-change', (e) => {
+      output13.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 15: Allow input
+    const demo15 = document.getElementById('demo15');
+    const output15 = document.getElementById('output15');
+    demo15.addEventListener('intl-change', (e) => {
+      output15.textContent = JSON.stringify(e.detail, null, 2);
     });
   </script>
 </body>

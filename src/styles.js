@@ -424,7 +424,110 @@ styles.replaceSync(/* css */`
     direction: rtl;
   }
 
+  /* --- Presets sidebar --- */
+  .idp-has-presets {
+    display: flex;
+    gap: 0;
+  }
+
+  .idp-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    border-right: 1px solid var(--idp-border);
+    min-width: 120px;
+    max-width: 160px;
+  }
+
+  :host([dir="rtl"]) .idp-presets {
+    border-right: none;
+    border-left: 1px solid var(--idp-border);
+  }
+
+  .idp-calendar-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .idp-preset-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--idp-radius);
+    cursor: pointer;
+    padding: 6px 10px;
+    color: var(--idp-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: start;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  .idp-preset-btn:hover {
+    background: var(--idp-hover);
+  }
+
+  .idp-preset-btn.active {
+    background: var(--idp-primary);
+    color: var(--idp-selected-text);
+  }
+
+  @media (max-width: 500px) {
+    .idp-has-presets {
+      flex-direction: column;
+    }
+
+    .idp-presets {
+      flex-direction: row;
+      overflow-x: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--idp-border);
+      max-width: none;
+      min-width: 0;
+    }
+
+    :host([dir="rtl"]) .idp-presets {
+      border-left: none;
+      border-bottom: 1px solid var(--idp-border);
+    }
+  }
+
+  /* --- Week numbers --- */
+  .idp-week-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--idp-muted);
+    opacity: 0.6;
+    user-select: none;
+    width: var(--idp-day-size);
+  }
+
+  .idp-week-number-header {
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  /* --- Multi-month --- */
+  .idp-months-container {
+    display: flex;
+    gap: 16px;
+  }
+
+  .idp-month-panel {
+    flex: 1;
+    min-width: 280px;
+  }
+
   /* --- Responsive --- */
+  @media (max-width: 600px) {
+    .idp-months-container {
+      flex-direction: column;
+    }
+  }
+
   @media (max-width: 400px) {
     .idp-calendar {
       min-width: unset;
@@ -454,6 +557,25 @@ styles.replaceSync(/* css */`
     .idp-calendar {
       border: 2px solid ButtonText;
     }
+  }
+
+  /* --- Open/close animations --- */
+  @keyframes idp-open {
+    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes idp-close {
+    from { opacity: 1; transform: scale(1) translateY(0); }
+    to { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  }
+
+  .idp-calendar.idp-animating-in {
+    animation: idp-open 150ms ease-out forwards;
+  }
+
+  .idp-calendar.idp-animating-out {
+    animation: idp-close 150ms ease-out forwards;
   }
 
   /* --- Reduced motion --- */
