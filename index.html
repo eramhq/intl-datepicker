@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>intl-datepicker — Multi-Calendar Datepicker Demo</title>
   <style>
+    /* ── Variables ── */
     :root {
       --bg: #f8fafc;
       --card-bg: #ffffff;
@@ -12,8 +13,8 @@
       --text-muted: #64748b;
       --border: #e2e8f0;
       --accent: #2563eb;
+      --font-mono: 'SF Mono', Monaco, Consolas, monospace;
     }
-
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #0f172a;
@@ -25,33 +26,24 @@
       }
     }
 
+    /* ── Reset & Base ── */
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    html { scroll-behavior: smooth; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 2rem 1rem;
     }
 
-    .container {
-      max-width: 900px;
+    /* ── Page Header ── */
+    .page-header {
+      max-width: 1150px;
       margin: 0 auto;
+      padding: 2rem 1rem 1rem;
     }
-
-    h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-
-    .subtitle {
-      color: var(--text-muted);
-      margin-bottom: 2rem;
-      font-size: 1.1rem;
-    }
-
+    .page-header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .subtitle { color: var(--text-muted); font-size: 1.1rem; }
     .badge {
       display: inline-block;
       background: var(--accent);
@@ -64,48 +56,194 @@
       margin-left: 0.5rem;
     }
 
+    /* ── Global Bar ── */
+    .global-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .global-bar .global-label {
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    .global-bar label {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.875rem;
+    }
+    .global-bar select {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.8125rem;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      max-width: 1150px;
+      margin: 0 auto;
+      display: flex;
+      gap: 2rem;
+      padding: 1.5rem 1rem 2rem;
+      align-items: flex-start;
+    }
+    .content { flex: 1; min-width: 0; max-width: 900px; }
+
+    /* ── TOC ── */
+    .toc {
+      position: sticky;
+      top: 3.5rem;
+      width: 200px;
+      flex-shrink: 0;
+      max-height: calc(100vh - 4rem);
+      overflow-y: auto;
+      font-size: 0.8125rem;
+    }
+    .toc details > summary {
+      display: none;
+    }
+    .toc-group { margin-bottom: 0.75rem; }
+    .toc-group-title {
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+      padding-left: 0.5rem;
+    }
+    .toc a {
+      display: block;
+      padding: 0.2rem 0.5rem;
+      color: var(--text);
+      text-decoration: none;
+      border-radius: 4px;
+      line-height: 1.4;
+    }
+    .toc a:hover {
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      color: var(--accent);
+    }
+
+    /* ── Group Headings ── */
+    .group-heading {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 2rem 0 1rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .group-heading::before, .group-heading::after {
+      content: '';
+      flex: 1;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Demo Sections ── */
     .demo-section {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
+      scroll-margin-top: 5rem;
     }
-
-    .demo-section h2 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 0.25rem;
-    }
-
-    .demo-section p {
+    .demo-section h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .demo-section > p { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.75rem; }
+    .demo-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1rem; }
+    .demo-row > div > p { font-size: 0.8rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+    .note {
+      font-size: 0.8125rem;
       color: var(--text-muted);
-      font-size: 0.875rem;
+      font-style: italic;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── Attribute Tags ── */
+    .attr-list { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 0.5rem; }
+    .attr-tag {
+      display: inline-block;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+    }
+
+    /* ── Code Blocks ── */
+    .code-block {
+      position: relative;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem 1rem 0.75rem;
       margin-bottom: 1rem;
+      overflow-x: auto;
     }
-
-    .demo-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      gap: 1rem;
+    .code-block pre { margin: 0; }
+    .code-block code {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      color: var(--text);
     }
+    .code-label {
+      position: absolute;
+      top: 0.375rem;
+      left: 0.75rem;
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    .copy-btn {
+      position: absolute;
+      top: 0.375rem;
+      right: 0.5rem;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .copy-btn:hover { background: var(--border); color: var(--text); }
 
+    /* ── Controls ── */
     .controls {
       display: flex;
       flex-wrap: wrap;
       gap: 0.75rem;
       margin-bottom: 1rem;
+      align-items: center;
     }
-
     .controls label {
       display: flex;
       align-items: center;
       gap: 0.375rem;
       font-size: 0.875rem;
     }
-
-    .controls select, .controls input[type="text"] {
+    .controls select, .controls input[type="text"], .controls input[type="number"] {
       padding: 6px 10px;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -114,20 +252,43 @@
       font: inherit;
       font-size: 0.875rem;
     }
+    .controls input[type="number"] { width: 60px; }
+    .controls .date-input { width: 120px; }
+    .controls input[type="color"] {
+      width: 32px;
+      height: 26px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px;
+      cursor: pointer;
+    }
+    .controls input[type="range"] { width: 100px; }
+    .controls code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
 
+    /* ── Output ── */
     .output {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 0.75rem 1rem;
-      font-family: 'SF Mono', Monaco, monospace;
+      font-family: var(--font-mono);
       font-size: 0.8125rem;
       margin-top: 0.75rem;
       min-height: 2.5rem;
       color: var(--text-muted);
       white-space: pre-wrap;
     }
+    .output.flash { animation: output-flash 0.3s ease-out; }
+    @keyframes output-flash {
+      from { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+      to { background: var(--bg); }
+    }
 
+    /* ── Form Elements ── */
     .external-input {
       padding: 8px 12px;
       border: 1px solid var(--border);
@@ -137,313 +298,764 @@
       font: inherit;
       min-width: 200px;
     }
+    .form-demo button {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .form-demo button[type="submit"] {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .form-demo button[type="reset"] {
+      background: var(--card-bg);
+      color: var(--text);
+    }
 
-    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-
+    /* ── Footer ── */
     footer {
       text-align: center;
       color: var(--text-muted);
       font-size: 0.8125rem;
       margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
     }
-
     footer a { color: var(--accent); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
+
+    /* ── Responsive ── */
+    @media (max-width: 899px) {
+      .layout { flex-direction: column; gap: 0; }
+      .toc {
+        position: static;
+        width: 100%;
+        max-height: none;
+        margin-bottom: 1rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.5rem;
+      }
+      .toc details > summary {
+        display: block;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.875rem;
+        padding: 0.5rem;
+        list-style: none;
+      }
+      .toc details > summary::marker,
+      .toc details > summary::-webkit-details-marker { display: none; }
+      .toc details > summary::after { content: ' ▼'; font-size: 0.625rem; }
+      .toc details[open] > summary::after { content: ' ▲'; font-size: 0.625rem; }
+      .toc-links { padding: 0.25rem 0; }
+      .demo-row { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <!-- ── Header ── -->
+  <div class="page-header">
     <h1>intl-datepicker <span class="badge">v0.2.0</span></h1>
     <p class="subtitle">Framework-agnostic multi-calendar datepicker Web Component</p>
-
-    <!-- 1. Calendar Switching -->
-    <section class="demo-section">
-      <h2>Calendar Switching</h2>
-      <p>Pick a calendar system and locale to see instant switching.</p>
-      <div class="controls">
-        <label>
-          Calendar:
-          <select id="calSelect">
-            <option value="gregory">Gregorian</option>
-            <option value="persian" selected>Persian (Jalali)</option>
-            <option value="islamic">Islamic (Umalqura)</option>
-            <option value="islamic-civil">Islamic (Civil)</option>
-            <option value="hebrew">Hebrew</option>
-            <option value="buddhist">Buddhist</option>
-            <option value="japanese">Japanese</option>
-            <option value="indian">Indian (Saka)</option>
-            <option value="coptic">Coptic</option>
-            <option value="ethiopic">Ethiopic</option>
-            <option value="roc">ROC (Taiwan)</option>
-          </select>
-        </label>
-        <label>
-          Locale:
-          <select id="localeSelect">
-            <option value="en-US">English (US)</option>
-            <option value="fa-IR" selected>Persian (Iran)</option>
-            <option value="ar-SA">Arabic (Saudi)</option>
-            <option value="he-IL">Hebrew (Israel)</option>
-            <option value="th-TH">Thai</option>
-            <option value="ja-JP">Japanese</option>
-            <option value="hi-IN">Hindi</option>
-            <option value="fr-FR">French</option>
-            <option value="de-DE">German</option>
-          </select>
-        </label>
-      </div>
-      <intl-datepicker id="demo1" calendar="persian" locale="fa-IR" placeholder="Select a date..." show-alternate></intl-datepicker>
-      <div class="output" id="output1">No date selected</div>
-    </section>
-
-    <!-- 2. Date Range -->
-    <section class="demo-section">
-      <h2>Date Range Selection</h2>
-      <p>Select a start and end date. Click once to set start, click again to set end.</p>
-      <intl-datepicker id="demo2" type="range" calendar="gregory" locale="en-US" placeholder="Select date range..."></intl-datepicker>
-      <div class="output" id="output2">No range selected</div>
-    </section>
-
-    <!-- 3. External Input -->
-    <section class="demo-section">
-      <h2>External Input (for attribute)</h2>
-      <p>The datepicker targets an existing input using the <code>for</code> attribute.</p>
-      <div class="demo-row">
-        <input type="text" id="extInput" class="external-input" placeholder="Click to pick a date">
-        <intl-datepicker id="demo3" for="extInput" calendar="persian" locale="fa-IR"></intl-datepicker>
-      </div>
-      <div class="output" id="output3">No date selected</div>
-    </section>
-
-    <!-- 4. Inline Calendar -->
-    <section class="demo-section">
-      <h2>Inline Calendar</h2>
-      <p>Always-visible calendar, great for embedding in forms.</p>
-      <div class="controls">
-        <label>
-          Min:
-          <input type="text" id="minInput" placeholder="YYYY-MM-DD" value="2024-01-01" style="width:120px">
-        </label>
-        <label>
-          Max:
-          <input type="text" id="maxInput" placeholder="YYYY-MM-DD" value="2025-12-31" style="width:120px">
-        </label>
-      </div>
-      <intl-datepicker id="demo4" inline calendar="gregory" locale="en-US" min="2024-01-01" max="2025-12-31"></intl-datepicker>
-      <div class="output" id="output4">No date selected</div>
-    </section>
-
-    <!-- 5. Min/Max Constraints -->
-    <section class="demo-section">
-      <h2>Pre-populated & Disabled State</h2>
-      <p>A datepicker with a pre-set value and another that is disabled.</p>
-      <div class="demo-row">
-        <intl-datepicker id="demo5" calendar="gregory" value="2024-06-15" locale="en-US" placeholder="Pre-populated"></intl-datepicker>
-        <intl-datepicker calendar="gregory" locale="en-US" disabled placeholder="Disabled picker" value="2024-01-01"></intl-datepicker>
-      </div>
-    </section>
-
-    <!-- 6. Theming -->
-    <section class="demo-section">
-      <h2>Custom Theming</h2>
-      <p>Override CSS custom properties for a custom look.</p>
-      <intl-datepicker id="demo6" calendar="gregory" locale="en-US" placeholder="Themed picker"
-        style="--idp-primary: #8b5cf6; --idp-radius: 16px; --idp-selected-bg: #8b5cf6; --idp-today-border: #8b5cf6;"
-      ></intl-datepicker>
-    </section>
-
-    <!-- 7. Disabled Dates -->
-    <section class="demo-section">
-      <h2>Disabled Dates</h2>
-      <p>Disable specific dates, weekends, or use a custom filter.</p>
-      <div class="demo-row">
-        <div>
-          <p style="font-size:0.8rem;margin-bottom:0.5rem"><strong>Static list</strong> (Dec 25, Dec 31 disabled)</p>
-          <intl-datepicker id="demo7a" calendar="gregory" locale="en-US" placeholder="Holidays disabled"
-            disabled-dates='["2024-12-25","2024-12-31","2025-01-01"]'
-          ></intl-datepicker>
-        </div>
-        <div>
-          <p style="font-size:0.8rem;margin-bottom:0.5rem"><strong>Weekends disabled</strong></p>
-          <intl-datepicker id="demo7b" calendar="gregory" locale="en-US" placeholder="No weekends"
-            disable-weekends
-          ></intl-datepicker>
-        </div>
-        <div>
-          <p style="font-size:0.8rem;margin-bottom:0.5rem"><strong>Custom filter</strong> (odd days only)</p>
-          <intl-datepicker id="demo7c" calendar="gregory" locale="en-US" placeholder="Odd days only"
-          ></intl-datepicker>
-        </div>
-      </div>
-      <div class="output" id="output7">No date selected</div>
-    </section>
-
-    <!-- 8. Multiple Selection -->
-    <section class="demo-section">
-      <h2>Multiple Date Selection</h2>
-      <p>Select multiple dates by clicking. Click again to deselect.</p>
-      <intl-datepicker id="demo8" type="multiple" calendar="gregory" locale="en-US"
-        placeholder="Pick multiple dates..." max-dates="5"
-      ></intl-datepicker>
-      <div class="output" id="output8">No dates selected</div>
-    </section>
-
-    <!-- 9. Month & Year Picker -->
-    <section class="demo-section">
-      <h2>Month & Year Picker</h2>
-      <p>Select just a month or just a year.</p>
-      <div class="demo-row">
-        <intl-datepicker id="demo9a" type="month" calendar="gregory" locale="en-US" placeholder="Select month..."></intl-datepicker>
-        <intl-datepicker id="demo9b" type="year" calendar="gregory" locale="en-US" placeholder="Select year..."></intl-datepicker>
-      </div>
-      <div class="output" id="output9">No selection</div>
-    </section>
-
-    <!-- 10. Custom Day Rendering (mapDays) -->
-    <section class="demo-section">
-      <h2>Custom Day Rendering</h2>
-      <p>Use <code>mapDays</code> to add prices, colors, or badges to days.</p>
-      <intl-datepicker id="demo10" calendar="gregory" locale="en-US" inline></intl-datepicker>
-      <div class="output" id="output10">No date selected</div>
-    </section>
-
-    <!-- 11. Multi-Month View -->
-    <section class="demo-section">
-      <h2>Multi-Month View</h2>
-      <p>Show 2 or 3 months side by side — great for range selection.</p>
-      <intl-datepicker id="demo11" type="range" months="2" calendar="gregory" locale="en-US" inline></intl-datepicker>
-      <div class="output" id="output11">No range selected</div>
-    </section>
-
-    <!-- 12. Range Presets -->
-    <section class="demo-section">
-      <h2>Range Presets</h2>
-      <p>Predefined date ranges for quick selection.</p>
-      <intl-datepicker id="demo12" type="range" calendar="gregory" locale="en-US" inline
-        presets='[
-          {"label":"Today","value":"today/today"},
-          {"label":"Last 7 days","value":"-6d/today"},
-          {"label":"This month","value":"monthStart/monthEnd"},
-          {"label":"Last month","value":"prevMonthStart/prevMonthEnd"},
-          {"label":"This year","value":"yearStart/yearEnd"}
-        ]'
-      ></intl-datepicker>
-      <div class="output" id="output12">No range selected</div>
-    </section>
-
-    <!-- 13. Week Picker -->
-    <section class="demo-section">
-      <h2>Week Picker</h2>
-      <p>Click any day to select the entire week.</p>
-      <intl-datepicker id="demo13" type="week" calendar="gregory" locale="en-US" placeholder="Select a week..."></intl-datepicker>
-      <div class="output" id="output13">No week selected</div>
-    </section>
-
-    <!-- 14. Week Numbers & Hide Outside Days -->
-    <section class="demo-section">
-      <h2>Week Numbers & Options</h2>
-      <p>Show ISO week numbers and hide outside-month days.</p>
-      <div class="demo-row">
-        <intl-datepicker id="demo14a" calendar="gregory" locale="en-US" inline show-week-numbers></intl-datepicker>
-        <intl-datepicker id="demo14b" calendar="gregory" locale="en-US" inline hide-outside-days></intl-datepicker>
-      </div>
-    </section>
-
-    <!-- 15. Allow Direct Input -->
-    <section class="demo-section">
-      <h2>Allow Direct Input</h2>
-      <p>Type a date directly into the input field (YYYY-MM-DD or locale format).</p>
-      <intl-datepicker id="demo15" calendar="gregory" locale="en-US" placeholder="Type a date..." allow-input></intl-datepicker>
-      <div class="output" id="output15">No date selected</div>
-    </section>
-
-    <hr>
-    <footer>
-      <p>Built with <code>&lt;intl-datepicker&gt;</code> — <a href="https://github.com/user/intl-datepicker">GitHub</a></p>
-    </footer>
   </div>
+
+  <!-- ── Global Switcher Bar ── -->
+  <div class="global-bar">
+    <span class="global-label">Global:</span>
+    <label>Calendar:
+      <select id="globalCal">
+        <option value="gregory" selected>Gregorian</option>
+        <option value="persian">Persian (Jalali)</option>
+        <option value="islamic">Islamic (Umalqura)</option>
+        <option value="islamic-civil">Islamic (Civil)</option>
+        <option value="hebrew">Hebrew</option>
+        <option value="buddhist">Buddhist</option>
+        <option value="japanese">Japanese</option>
+        <option value="indian">Indian (Saka)</option>
+        <option value="coptic">Coptic</option>
+        <option value="ethiopic">Ethiopic</option>
+        <option value="roc">ROC (Taiwan)</option>
+      </select>
+    </label>
+    <label>Locale:
+      <select id="globalLocale">
+        <option value="en-US" selected>English (US)</option>
+        <option value="fa-IR">Persian (Iran)</option>
+        <option value="ar-SA">Arabic (Saudi)</option>
+        <option value="he-IL">Hebrew (Israel)</option>
+        <option value="th-TH">Thai</option>
+        <option value="ja-JP">Japanese</option>
+        <option value="hi-IN">Hindi</option>
+        <option value="fr-FR">French</option>
+        <option value="de-DE">German</option>
+        <option value="ko-KR">Korean</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- ── Layout ── -->
+  <div class="layout">
+
+    <!-- ── TOC ── -->
+    <nav class="toc">
+      <details open>
+        <summary>Contents</summary>
+        <div class="toc-links">
+          <div class="toc-group">
+            <div class="toc-group-title">Core</div>
+            <a href="#sec-basic">Basic</a>
+            <a href="#sec-external">External Input</a>
+            <a href="#sec-form">Form Integration</a>
+          </div>
+          <div class="toc-group">
+            <div class="toc-group-title">Selection Modes</div>
+            <a href="#sec-range">Range</a>
+            <a href="#sec-multiple">Multiple</a>
+            <a href="#sec-week">Week</a>
+            <a href="#sec-month-year">Month &amp; Year</a>
+            <a href="#sec-presets">Presets</a>
+          </div>
+          <div class="toc-group">
+            <div class="toc-group-title">Display</div>
+            <a href="#sec-inline">Inline + Min/Max</a>
+            <a href="#sec-multi-month">Multi-Month</a>
+            <a href="#sec-display">Display Options</a>
+          </div>
+          <div class="toc-group">
+            <div class="toc-group-title">Customization</div>
+            <a href="#sec-theming">Theming</a>
+            <a href="#sec-disabled">Disabled Dates</a>
+            <a href="#sec-mapdays">mapDays</a>
+          </div>
+          <div class="toc-group">
+            <div class="toc-group-title">Input &amp; States</div>
+            <a href="#sec-input">Direct Input</a>
+            <a href="#sec-states">States</a>
+          </div>
+        </div>
+      </details>
+    </nav>
+
+    <!-- ── Content ── -->
+    <div class="content">
+
+      <!-- ════════════ CORE ════════════ -->
+      <div class="group-heading"><span>Core</span></div>
+
+      <!-- 1. Basic -->
+      <section id="sec-basic" class="demo-section" data-output>
+        <h2>Basic Datepicker</h2>
+        <p>The simplest usage — just drop in the element with zero configuration.</p>
+        <p class="note">Use the global switcher above to change all examples to any calendar system.</p>
+        <div class="attr-list">
+          <span class="attr-tag">show-alternate</span>
+          <span class="attr-tag">placeholder</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;!-- Zero config --&gt;
+&lt;intl-datepicker&gt;&lt;/intl-datepicker&gt;
+
+&lt;!-- With options --&gt;
+&lt;intl-datepicker
+  placeholder="Pick a date..."
+  show-alternate
+  calendar="persian"
+  locale="fa-IR"&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <intl-datepicker id="demo-basic" calendar="gregory" locale="en-US"></intl-datepicker>
+          <intl-datepicker id="demo-basic-alt" calendar="gregory" locale="en-US" placeholder="Pick a date..." show-alternate></intl-datepicker>
+        </div>
+        <div class="output">No date selected</div>
+      </section>
+
+      <!-- 2. External Input -->
+      <section id="sec-external" class="demo-section" data-output>
+        <h2>External Input</h2>
+        <p>Target an existing input using the <code>for</code> attribute.</p>
+        <div class="attr-list">
+          <span class="attr-tag">for</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;input type="text" id="myInput" placeholder="Click to pick"&gt;
+&lt;intl-datepicker for="myInput"&gt;&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <input type="text" id="extInput" class="external-input" placeholder="Click to pick a date">
+          <intl-datepicker id="demo-external" for="extInput" calendar="gregory" locale="en-US"></intl-datepicker>
+        </div>
+        <div class="output">No date selected</div>
+      </section>
+
+      <!-- 3. Form Integration -->
+      <section id="sec-form" class="demo-section">
+        <h2>Form Integration</h2>
+        <p>Works as a native form element with <code>name</code>, <code>required</code>, validation, submit and reset.</p>
+        <div class="attr-list">
+          <span class="attr-tag">name</span>
+          <span class="attr-tag">required</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;form id="booking-form"&gt;
+  &lt;intl-datepicker name="appointment" required
+    placeholder="Select appointment date..."&gt;
+  &lt;/intl-datepicker&gt;
+  &lt;button type="submit"&gt;Book&lt;/button&gt;
+  &lt;button type="reset"&gt;Reset&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+        </div>
+        <div class="code-block">
+          <span class="code-label">JavaScript</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>form.addEventListener('submit', (e) =&gt; {
+  e.preventDefault();
+  const data = new FormData(form);
+  console.log([...data.entries()]);
+});</code></pre>
+        </div>
+        <form id="booking-form" class="form-demo">
+          <div class="demo-row" style="align-items:center">
+            <intl-datepicker name="appointment" required calendar="gregory" locale="en-US" placeholder="Select appointment date..."></intl-datepicker>
+            <button type="submit">Book</button>
+            <button type="reset">Reset</button>
+          </div>
+        </form>
+        <div class="output" id="form-output">Submit the form to see FormData</div>
+      </section>
+
+      <!-- ════════════ SELECTION MODES ════════════ -->
+      <div class="group-heading"><span>Selection Modes</span></div>
+
+      <!-- 4. Range -->
+      <section id="sec-range" class="demo-section" data-output>
+        <h2>Date Range Selection</h2>
+        <p>Click once to set start, click again to set end.</p>
+        <div class="attr-list">
+          <span class="attr-tag">type="range"</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker type="range"
+  placeholder="Select date range..."&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <intl-datepicker id="demo-range" type="range" calendar="gregory" locale="en-US" placeholder="Select date range..."></intl-datepicker>
+        <div class="output">No range selected</div>
+      </section>
+
+      <!-- 5. Multiple -->
+      <section id="sec-multiple" class="demo-section" data-output>
+        <h2>Multiple Date Selection</h2>
+        <p>Select multiple dates by clicking. Click again to deselect.</p>
+        <div class="attr-list">
+          <span class="attr-tag">type="multiple"</span>
+          <span class="attr-tag">max-dates</span>
+          <span class="attr-tag">sort-dates</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker type="multiple"
+  max-dates="5" sort-dates
+  placeholder="Pick multiple dates..."&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="controls">
+          <label><input type="checkbox" data-toggle-attr="sort-dates" data-target="demo-multi"> sort-dates</label>
+          <label>max-dates: <input type="number" data-toggle-attr="max-dates" data-target="demo-multi" value="5" min="1" max="10"></label>
+        </div>
+        <intl-datepicker id="demo-multi" type="multiple" calendar="gregory" locale="en-US" placeholder="Pick multiple dates..." max-dates="5"></intl-datepicker>
+        <div class="output">No dates selected</div>
+      </section>
+
+      <!-- 6. Week -->
+      <section id="sec-week" class="demo-section" data-output>
+        <h2>Week Picker</h2>
+        <p>Click any day to select the entire week.</p>
+        <div class="attr-list">
+          <span class="attr-tag">type="week"</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker type="week"
+  placeholder="Select a week..."&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <intl-datepicker id="demo-week" type="week" calendar="gregory" locale="en-US" placeholder="Select a week..."></intl-datepicker>
+        <div class="output">No week selected</div>
+      </section>
+
+      <!-- 7. Month & Year -->
+      <section id="sec-month-year" class="demo-section" data-output>
+        <h2>Month &amp; Year Picker</h2>
+        <p>Select just a month or just a year.</p>
+        <div class="attr-list">
+          <span class="attr-tag">type="month"</span>
+          <span class="attr-tag">type="year"</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker type="month"
+  placeholder="Select month..."&gt;
+&lt;/intl-datepicker&gt;
+
+&lt;intl-datepicker type="year"
+  placeholder="Select year..."&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <intl-datepicker id="demo-month" type="month" calendar="gregory" locale="en-US" placeholder="Select month..."></intl-datepicker>
+          <intl-datepicker id="demo-year" type="year" calendar="gregory" locale="en-US" placeholder="Select year..."></intl-datepicker>
+        </div>
+        <div class="output">No selection</div>
+      </section>
+
+      <!-- 8. Presets -->
+      <section id="sec-presets" class="demo-section" data-output>
+        <h2>Range Presets</h2>
+        <p>Predefined date ranges for quick selection.</p>
+        <div class="attr-list">
+          <span class="attr-tag">type="range"</span>
+          <span class="attr-tag">presets</span>
+          <span class="attr-tag">inline</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker type="range" inline
+  presets='[
+    {"label":"Today","value":"today/today"},
+    {"label":"Last 7 days","value":"-6d/today"},
+    {"label":"This month","value":"monthStart/monthEnd"},
+    {"label":"Last month","value":"prevMonthStart/prevMonthEnd"},
+    {"label":"This year","value":"yearStart/yearEnd"}
+  ]'&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <intl-datepicker id="demo-presets" type="range" calendar="gregory" locale="en-US" inline
+          presets='[
+            {"label":"Today","value":"today/today"},
+            {"label":"Last 7 days","value":"-6d/today"},
+            {"label":"This month","value":"monthStart/monthEnd"},
+            {"label":"Last month","value":"prevMonthStart/prevMonthEnd"},
+            {"label":"This year","value":"yearStart/yearEnd"}
+          ]'
+        ></intl-datepicker>
+        <div class="output">No range selected</div>
+      </section>
+
+      <!-- ════════════ DISPLAY ════════════ -->
+      <div class="group-heading"><span>Display</span></div>
+
+      <!-- 9. Inline + Min/Max -->
+      <section id="sec-inline" class="demo-section" data-output>
+        <h2>Inline Calendar with Min/Max</h2>
+        <p>Always-visible calendar with date range constraints.</p>
+        <div class="attr-list">
+          <span class="attr-tag">inline</span>
+          <span class="attr-tag">min</span>
+          <span class="attr-tag">max</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker inline
+  min="2024-01-01"
+  max="2025-12-31"&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="controls">
+          <label>Min: <input type="text" id="minInput" class="date-input" placeholder="YYYY-MM-DD" value="2024-01-01"></label>
+          <label>Max: <input type="text" id="maxInput" class="date-input" placeholder="YYYY-MM-DD" value="2025-12-31"></label>
+        </div>
+        <intl-datepicker id="demo-inline" inline calendar="gregory" locale="en-US" min="2024-01-01" max="2025-12-31"></intl-datepicker>
+        <div class="output">No date selected</div>
+      </section>
+
+      <!-- 10. Multi-Month -->
+      <section id="sec-multi-month" class="demo-section" data-output>
+        <h2>Multi-Month View</h2>
+        <p>Show 2 or 3 months side by side — great for range selection.</p>
+        <div class="attr-list">
+          <span class="attr-tag">months</span>
+          <span class="attr-tag">type="range"</span>
+          <span class="attr-tag">inline</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker type="range"
+  months="2" inline&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <intl-datepicker id="demo-multi-month" type="range" months="2" calendar="gregory" locale="en-US" inline></intl-datepicker>
+        <div class="output">No range selected</div>
+      </section>
+
+      <!-- 11. Display Options -->
+      <section id="sec-display" class="demo-section">
+        <h2>Display Options</h2>
+        <p>Toggle week numbers, outside-day visibility, and animations.</p>
+        <div class="attr-list">
+          <span class="attr-tag">show-week-numbers</span>
+          <span class="attr-tag">hide-outside-days</span>
+          <span class="attr-tag">no-animation</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker inline
+  show-week-numbers
+  hide-outside-days
+  no-animation&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="controls">
+          <label><input type="checkbox" data-toggle-attr="show-week-numbers" data-target="demo-display" checked> show-week-numbers</label>
+          <label><input type="checkbox" data-toggle-attr="hide-outside-days" data-target="demo-display"> hide-outside-days</label>
+          <label><input type="checkbox" data-toggle-attr="no-animation" data-target="demo-display"> no-animation</label>
+        </div>
+        <intl-datepicker id="demo-display" inline show-week-numbers calendar="gregory" locale="en-US"></intl-datepicker>
+      </section>
+
+      <!-- ════════════ CUSTOMIZATION ════════════ -->
+      <div class="group-heading"><span>Customization</span></div>
+
+      <!-- 12. Theming -->
+      <section id="sec-theming" class="demo-section">
+        <h2>Custom Theming</h2>
+        <p>Override CSS custom properties for a custom look.</p>
+        <div class="attr-list">
+          <span class="attr-tag">--idp-primary</span>
+          <span class="attr-tag">--idp-radius</span>
+          <span class="attr-tag">--idp-selected-bg</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker inline style="
+  --idp-primary: #8b5cf6;
+  --idp-radius: 16px;
+  --idp-selected-bg: #8b5cf6;
+  --idp-today-border: #8b5cf6;"&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="controls">
+          <label>Primary color: <input type="color" id="theme-color" value="#8b5cf6"></label>
+          <label>Border radius: <input type="range" id="theme-radius" min="0" max="20" value="16"> <code id="theme-radius-val">16px</code></label>
+        </div>
+        <intl-datepicker id="demo-theme" inline calendar="gregory" locale="en-US"
+          style="--idp-primary: #8b5cf6; --idp-radius: 16px; --idp-selected-bg: #8b5cf6; --idp-today-border: #8b5cf6;"
+        ></intl-datepicker>
+      </section>
+
+      <!-- 13. Disabled Dates -->
+      <section id="sec-disabled" class="demo-section" data-output>
+        <h2>Disabled Dates</h2>
+        <p>Disable specific dates, weekends, or use a custom filter function.</p>
+        <div class="attr-list">
+          <span class="attr-tag">disabled-dates</span>
+          <span class="attr-tag">disable-weekends</span>
+          <span class="attr-tag">disabledDatesFilter</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;!-- Static list --&gt;
+&lt;intl-datepicker
+  disabled-dates='["2024-12-25","2024-12-31"]'&gt;
+&lt;/intl-datepicker&gt;
+
+&lt;!-- Weekends --&gt;
+&lt;intl-datepicker disable-weekends&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="code-block">
+          <span class="code-label">JavaScript</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>// Custom filter: disable even days
+picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
+        </div>
+        <div class="demo-row">
+          <div>
+            <p><strong>Static list</strong> (Dec 25, Dec 31)</p>
+            <intl-datepicker id="demo-disabled-list" calendar="gregory" locale="en-US" placeholder="Holidays disabled"
+              disabled-dates='["2024-12-25","2024-12-31","2025-01-01"]'
+            ></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>Weekends disabled</strong></p>
+            <intl-datepicker id="demo-disabled-weekends" calendar="gregory" locale="en-US" placeholder="No weekends"
+              disable-weekends
+            ></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>Custom filter</strong> (even days disabled)</p>
+            <intl-datepicker id="demo-disabled-filter" calendar="gregory" locale="en-US" placeholder="Odd days only"
+            ></intl-datepicker>
+          </div>
+        </div>
+        <div class="output">No date selected</div>
+      </section>
+
+      <!-- 14. mapDays -->
+      <section id="sec-mapdays" class="demo-section" data-output>
+        <h2>Custom Day Rendering</h2>
+        <p>Use <code>mapDays</code> to add prices, colors, or badges to individual days.</p>
+        <div class="attr-list">
+          <span class="attr-tag">mapDays</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">JavaScript</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>picker.mapDays = ({ date, isToday }) =&gt; {
+  const prices = { 1: '$89', 10: '$65', 15: '$99', 25: '$150' };
+  const result = {};
+  if (prices[date.day]) {
+    result.content = `&lt;span style="font-size:9px;color:#059669"&gt;
+      ${prices[date.day]}&lt;/span&gt;`;
+  }
+  if (date.dayOfWeek === 0 || date.dayOfWeek === 6) {
+    result.style = 'color:#ef4444';
+  }
+  return result;
+};</code></pre>
+        </div>
+        <intl-datepicker id="demo-mapdays" calendar="gregory" locale="en-US" inline></intl-datepicker>
+        <div class="output">No date selected</div>
+      </section>
+
+      <!-- ════════════ INPUT & STATES ════════════ -->
+      <div class="group-heading"><span>Input &amp; States</span></div>
+
+      <!-- 15. Direct Input -->
+      <section id="sec-input" class="demo-section" data-output>
+        <h2>Allow Direct Input</h2>
+        <p>Type a date directly into the input field (YYYY-MM-DD or locale format).</p>
+        <div class="attr-list">
+          <span class="attr-tag">allow-input</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker allow-input
+  placeholder="Type a date..."&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <intl-datepicker id="demo-input" calendar="gregory" locale="en-US" placeholder="Type a date..." allow-input></intl-datepicker>
+        <div class="output">No date selected</div>
+      </section>
+
+      <!-- 16. States -->
+      <section id="sec-states" class="demo-section">
+        <h2>States: Pre-populated, Disabled &amp; Readonly</h2>
+        <p>Datepickers with pre-set values, disabled state, and readonly state.</p>
+        <div class="attr-list">
+          <span class="attr-tag">value</span>
+          <span class="attr-tag">disabled</span>
+          <span class="attr-tag">readonly</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker value="2024-06-15"&gt;&lt;/intl-datepicker&gt;
+&lt;intl-datepicker disabled value="2024-01-01"&gt;&lt;/intl-datepicker&gt;
+&lt;intl-datepicker readonly value="2024-03-20"&gt;&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <div>
+            <p><strong>Pre-populated</strong></p>
+            <intl-datepicker calendar="gregory" locale="en-US" value="2024-06-15" placeholder="Pre-populated"></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>Disabled</strong></p>
+            <intl-datepicker calendar="gregory" locale="en-US" disabled placeholder="Disabled" value="2024-01-01"></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>Readonly</strong></p>
+            <intl-datepicker calendar="gregory" locale="en-US" readonly placeholder="Readonly" value="2024-03-20"></intl-datepicker>
+          </div>
+        </div>
+        <div style="margin-top:1.25rem">
+          <p style="font-size:0.875rem;color:var(--text-muted);margin-bottom:0.5rem"><strong>Interactive toggle:</strong></p>
+          <div class="controls">
+            <label><input type="checkbox" data-toggle-attr="disabled" data-target="demo-states-live"> disabled</label>
+            <label><input type="checkbox" data-toggle-attr="readonly" data-target="demo-states-live"> readonly</label>
+          </div>
+          <intl-datepicker id="demo-states-live" calendar="gregory" locale="en-US" value="2024-09-01" placeholder="Toggle states above"></intl-datepicker>
+        </div>
+      </section>
+
+      <!-- ── Footer ── -->
+      <footer>
+        <p>Built with <code>&lt;intl-datepicker&gt;</code> — <a href="https://github.com/navidkashani/intl-datepicker">GitHub</a></p>
+      </footer>
+
+    </div><!-- .content -->
+  </div><!-- .layout -->
 
   <script type="module">
     import './src/intl-datepicker.js';
 
-    // Demo 1: Calendar switching
-    const demo1 = document.getElementById('demo1');
-    const calSelect = document.getElementById('calSelect');
-    const localeSelect = document.getElementById('localeSelect');
-    const output1 = document.getElementById('output1');
+    // ── Helpers ─────────────────────────────────────────────────────
+    function flash(el) {
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+    }
 
-    calSelect.addEventListener('change', () => {
-      demo1.setAttribute('calendar', calSelect.value);
-    });
-    localeSelect.addEventListener('change', () => {
-      demo1.setAttribute('locale', localeSelect.value);
-    });
+    // ── Format output ──────────────────────────────────────────────
+    function formatOutput(detail) {
+      if (!detail || detail.iso === undefined) return 'No selection';
+      if (detail.iso === '') return 'Cleared';
 
-    demo1.addEventListener('intl-select', (e) => {
-      output1.textContent = JSON.stringify(e.detail, null, 2);
-    });
+      // Range (including week internally completing as range)
+      if (detail.rangeStart && detail.rangeEnd) {
+        const [start, end] = detail.iso.split('/');
+        return `Range:     ${start} \u2192 ${end}\nFormatted: ${detail.formatted}`;
+      }
 
-    // Demo 2: Range
-    const demo2 = document.getElementById('demo2');
-    const output2 = document.getElementById('output2');
-    demo2.addEventListener('intl-change', (e) => {
-      output2.textContent = JSON.stringify(e.detail, null, 2);
-    });
+      // Week
+      if (detail.weekStart && detail.weekEnd) {
+        return `Week:      ${detail.iso}\nFormatted: ${detail.formatted}`;
+      }
 
-    // Demo 3: External input
-    const demo3 = document.getElementById('demo3');
-    const output3 = document.getElementById('output3');
-    demo3.addEventListener('intl-select', (e) => {
-      output3.textContent = JSON.stringify(e.detail, null, 2);
-    });
+      // Multiple
+      if (detail.dates) {
+        const n = detail.dates.length;
+        return `Count:     ${n} date${n !== 1 ? 's' : ''}\nISO:       ${detail.iso}\nFormatted: ${detail.formatted}`;
+      }
 
-    // Demo 4: Inline with min/max
-    const demo4 = document.getElementById('demo4');
-    const output4 = document.getElementById('output4');
-    const minInput = document.getElementById('minInput');
-    const maxInput = document.getElementById('maxInput');
+      // Month (iso like 2024-06, calendar has year+month but no day)
+      if (detail.calendar && detail.calendar.month !== undefined && detail.calendar.day === undefined) {
+        return `Month:     ${detail.iso}\nFormatted: ${detail.formatted}`;
+      }
 
-    demo4.addEventListener('intl-select', (e) => {
-      output4.textContent = JSON.stringify(e.detail, null, 2);
-    });
+      // Year (iso is just a number string, calendar has year only)
+      if (detail.calendar && detail.calendar.year !== undefined && detail.calendar.month === undefined) {
+        return `Year:      ${detail.iso}\nFormatted: ${detail.formatted}`;
+      }
 
-    minInput.addEventListener('change', () => {
-      demo4.setAttribute('min', minInput.value);
-    });
-    maxInput.addEventListener('change', () => {
-      demo4.setAttribute('max', maxInput.value);
-    });
+      // Single date
+      return `ISO:       ${detail.iso}\nFormatted: ${detail.formatted}`;
+    }
 
-    // Demo 7: Disabled dates
-    const demo7c = document.getElementById('demo7c');
-    demo7c.disabledDatesFilter = ({ day }) => day % 2 === 0; // disable even days
-    const output7 = document.getElementById('output7');
-    ['demo7a', 'demo7b', 'demo7c'].forEach(id => {
-      document.getElementById(id).addEventListener('intl-select', (e) => {
-        output7.textContent = JSON.stringify(e.detail, null, 2);
+    // ── Auto-wire output displays ──────────────────────────────────
+    document.querySelectorAll('[data-output]').forEach(section => {
+      const output = section.querySelector('.output');
+      const pickers = section.querySelectorAll('intl-datepicker');
+      if (!pickers.length || !output) return;
+      const event = section.dataset.event || 'intl-change';
+      pickers.forEach(picker => {
+        picker.addEventListener(event, (e) => {
+          output.textContent = formatOutput(e.detail);
+          flash(output);
+        });
       });
     });
 
-    // Demo 8: Multiple selection
-    const demo8 = document.getElementById('demo8');
-    const output8 = document.getElementById('output8');
-    demo8.addEventListener('intl-change', (e) => {
-      output8.textContent = JSON.stringify(e.detail, null, 2);
-    });
+    // ── Global switcher ────────────────────────────────────────────
+    const globalCal = document.getElementById('globalCal');
+    const globalLocale = document.getElementById('globalLocale');
+    const allPickers = document.querySelectorAll('intl-datepicker');
+    function applyGlobal() {
+      const cal = globalCal.value;
+      const locale = globalLocale.value;
+      allPickers.forEach(p => {
+        p.setAttribute('calendar', cal);
+        p.setAttribute('locale', locale);
+      });
+    }
+    globalCal.addEventListener('change', applyGlobal);
+    globalLocale.addEventListener('change', applyGlobal);
 
-    // Demo 9: Month/Year picker
-    const output9 = document.getElementById('output9');
-    ['demo9a', 'demo9b'].forEach(id => {
-      document.getElementById(id).addEventListener('intl-change', (e) => {
-        output9.textContent = JSON.stringify(e.detail, null, 2);
+    // ── Copy buttons ───────────────────────────────────────────────
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.closest('.code-block').querySelector('code');
+        navigator.clipboard.writeText(code.textContent).then(() => {
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        });
       });
     });
 
-    // Demo 10: mapDays
-    const demo10 = document.getElementById('demo10');
-    const output10 = document.getElementById('output10');
-    demo10.mapDays = ({ date, isToday }) => {
-      const prices = { 1: '$89', 5: '$120', 10: '$65', 15: '$99', 20: '$75', 25: '$150' };
+    // ── Toggle controls (data-toggle-attr) ─────────────────────────
+    document.querySelectorAll('[data-toggle-attr]').forEach(ctrl => {
+      ctrl.addEventListener('change', () => {
+        const target = document.getElementById(ctrl.dataset.target);
+        if (!target) return;
+        const attr = ctrl.dataset.toggleAttr;
+        if (ctrl.type === 'checkbox') {
+          ctrl.checked ? target.setAttribute(attr, '') : target.removeAttribute(attr);
+        } else {
+          target.setAttribute(attr, ctrl.value);
+        }
+      });
+    });
+
+    // ── Form integration ───────────────────────────────────────────
+    const bookingForm = document.getElementById('booking-form');
+    const formOutput = document.getElementById('form-output');
+    bookingForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const data = new FormData(bookingForm);
+      const entries = [...data.entries()].map(([k, v]) => `${k}: ${v}`).join('\n');
+      formOutput.textContent = entries || 'No form data';
+      flash(formOutput);
+    });
+    bookingForm.addEventListener('reset', () => {
+      setTimeout(() => {
+        formOutput.textContent = 'Form reset';
+        flash(formOutput);
+      }, 0);
+    });
+
+    // ── Min/Max inputs ─────────────────────────────────────────────
+    const inlinePicker = document.getElementById('demo-inline');
+    for (const attr of ['min', 'max']) {
+      document.getElementById(attr === 'min' ? 'minInput' : 'maxInput')
+        .addEventListener('change', (e) => { inlinePicker.setAttribute(attr, e.target.value); });
+    }
+
+    // ── Theming controls ───────────────────────────────────────────
+    const themeColor = document.getElementById('theme-color');
+    const themeRadius = document.getElementById('theme-radius');
+    const themeRadiusVal = document.getElementById('theme-radius-val');
+    const themePicker = document.getElementById('demo-theme');
+    themeColor.addEventListener('input', () => {
+      const c = themeColor.value;
+      themePicker.style.setProperty('--idp-primary', c);
+      themePicker.style.setProperty('--idp-selected-bg', c);
+      themePicker.style.setProperty('--idp-today-border', c);
+    });
+    themeRadius.addEventListener('input', () => {
+      themePicker.style.setProperty('--idp-radius', themeRadius.value + 'px');
+      themeRadiusVal.textContent = themeRadius.value + 'px';
+    });
+
+    // ── Disabled dates: custom filter ──────────────────────────────
+    document.getElementById('demo-disabled-filter').disabledDatesFilter = ({ day }) => day % 2 === 0;
+
+    // ── mapDays: pricing + weekend colors ──────────────────────────
+    const prices = { 1: '$89', 5: '$120', 10: '$65', 15: '$99', 20: '$75', 25: '$150' };
+    document.getElementById('demo-mapdays').mapDays = ({ date }) => {
       const result = {};
       if (prices[date.day]) {
         result.content = `<span style="display:block;font-size:9px;color:#059669;margin-top:-2px">${prices[date.day]}</span>`;
@@ -453,37 +1065,6 @@
       }
       return result;
     };
-    demo10.addEventListener('intl-select', (e) => {
-      output10.textContent = JSON.stringify(e.detail, null, 2);
-    });
-
-    // Demo 11: Multi-month
-    const demo11 = document.getElementById('demo11');
-    const output11 = document.getElementById('output11');
-    demo11.addEventListener('intl-change', (e) => {
-      output11.textContent = JSON.stringify(e.detail, null, 2);
-    });
-
-    // Demo 12: Presets
-    const demo12 = document.getElementById('demo12');
-    const output12 = document.getElementById('output12');
-    demo12.addEventListener('intl-change', (e) => {
-      output12.textContent = JSON.stringify(e.detail, null, 2);
-    });
-
-    // Demo 13: Week picker
-    const demo13 = document.getElementById('demo13');
-    const output13 = document.getElementById('output13');
-    demo13.addEventListener('intl-change', (e) => {
-      output13.textContent = JSON.stringify(e.detail, null, 2);
-    });
-
-    // Demo 15: Allow input
-    const demo15 = document.getElementById('demo15');
-    const output15 = document.getElementById('output15');
-    demo15.addEventListener('intl-change', (e) => {
-      output15.textContent = JSON.stringify(e.detail, null, 2);
-    });
   </script>
 </body>
 </html>
