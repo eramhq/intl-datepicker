@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>intl-datepicker — Multi-Calendar Datepicker Demo</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --accent: #2563eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --accent: #3b82f6;
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+      font-size: 1.1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      vertical-align: middle;
+      margin-left: 0.5rem;
+    }
+
+    .demo-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .demo-section h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .demo-section p {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+
+    .demo-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .controls label {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.875rem;
+    }
+
+    .controls select, .controls input[type="text"] {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card-bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.875rem;
+    }
+
+    .output {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.8125rem;
+      margin-top: 0.75rem;
+      min-height: 2.5rem;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+    }
+
+    .external-input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text);
+      font: inherit;
+      min-width: 200px;
+    }
+
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+      margin-top: 2rem;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>intl-datepicker <span class="badge">v0.1.0</span></h1>
+    <p class="subtitle">Framework-agnostic multi-calendar datepicker Web Component</p>
+
+    <!-- 1. Calendar Switching -->
+    <section class="demo-section">
+      <h2>Calendar Switching</h2>
+      <p>Pick a calendar system and locale to see instant switching.</p>
+      <div class="controls">
+        <label>
+          Calendar:
+          <select id="calSelect">
+            <option value="gregory">Gregorian</option>
+            <option value="persian" selected>Persian (Jalali)</option>
+            <option value="islamic">Islamic (Umalqura)</option>
+            <option value="islamic-civil">Islamic (Civil)</option>
+            <option value="hebrew">Hebrew</option>
+            <option value="buddhist">Buddhist</option>
+            <option value="japanese">Japanese</option>
+            <option value="indian">Indian (Saka)</option>
+            <option value="coptic">Coptic</option>
+            <option value="ethiopic">Ethiopic</option>
+            <option value="roc">ROC (Taiwan)</option>
+          </select>
+        </label>
+        <label>
+          Locale:
+          <select id="localeSelect">
+            <option value="en-US">English (US)</option>
+            <option value="fa-IR" selected>Persian (Iran)</option>
+            <option value="ar-SA">Arabic (Saudi)</option>
+            <option value="he-IL">Hebrew (Israel)</option>
+            <option value="th-TH">Thai</option>
+            <option value="ja-JP">Japanese</option>
+            <option value="hi-IN">Hindi</option>
+            <option value="fr-FR">French</option>
+            <option value="de-DE">German</option>
+          </select>
+        </label>
+      </div>
+      <intl-datepicker id="demo1" calendar="persian" locale="fa-IR" placeholder="Select a date..." show-alternate></intl-datepicker>
+      <div class="output" id="output1">No date selected</div>
+    </section>
+
+    <!-- 2. Date Range -->
+    <section class="demo-section">
+      <h2>Date Range Selection</h2>
+      <p>Select a start and end date. Click once to set start, click again to set end.</p>
+      <intl-datepicker id="demo2" type="range" calendar="gregory" locale="en-US" placeholder="Select date range..."></intl-datepicker>
+      <div class="output" id="output2">No range selected</div>
+    </section>
+
+    <!-- 3. External Input -->
+    <section class="demo-section">
+      <h2>External Input (for attribute)</h2>
+      <p>The datepicker targets an existing input using the <code>for</code> attribute.</p>
+      <div class="demo-row">
+        <input type="text" id="extInput" class="external-input" placeholder="Click to pick a date">
+        <intl-datepicker id="demo3" for="extInput" calendar="persian" locale="fa-IR"></intl-datepicker>
+      </div>
+      <div class="output" id="output3">No date selected</div>
+    </section>
+
+    <!-- 4. Inline Calendar -->
+    <section class="demo-section">
+      <h2>Inline Calendar</h2>
+      <p>Always-visible calendar, great for embedding in forms.</p>
+      <div class="controls">
+        <label>
+          Min:
+          <input type="text" id="minInput" placeholder="YYYY-MM-DD" value="2024-01-01" style="width:120px">
+        </label>
+        <label>
+          Max:
+          <input type="text" id="maxInput" placeholder="YYYY-MM-DD" value="2025-12-31" style="width:120px">
+        </label>
+      </div>
+      <intl-datepicker id="demo4" inline calendar="gregory" locale="en-US" min="2024-01-01" max="2025-12-31"></intl-datepicker>
+      <div class="output" id="output4">No date selected</div>
+    </section>
+
+    <!-- 5. Min/Max Constraints -->
+    <section class="demo-section">
+      <h2>Pre-populated & Disabled State</h2>
+      <p>A datepicker with a pre-set value and another that is disabled.</p>
+      <div class="demo-row">
+        <intl-datepicker id="demo5" calendar="gregory" value="2024-06-15" locale="en-US" placeholder="Pre-populated"></intl-datepicker>
+        <intl-datepicker calendar="gregory" locale="en-US" disabled placeholder="Disabled picker" value="2024-01-01"></intl-datepicker>
+      </div>
+    </section>
+
+    <!-- 6. Theming -->
+    <section class="demo-section">
+      <h2>Custom Theming</h2>
+      <p>Override CSS custom properties for a custom look.</p>
+      <intl-datepicker id="demo6" calendar="gregory" locale="en-US" placeholder="Themed picker"
+        style="--idp-primary: #8b5cf6; --idp-radius: 16px; --idp-selected-bg: #8b5cf6; --idp-today-border: #8b5cf6;"
+      ></intl-datepicker>
+    </section>
+
+    <hr>
+    <footer>
+      <p>Built with <code>&lt;intl-datepicker&gt;</code> — <a href="https://github.com/user/intl-datepicker">GitHub</a></p>
+    </footer>
+  </div>
+
+  <script type="module">
+    import './src/intl-datepicker.js';
+
+    // Demo 1: Calendar switching
+    const demo1 = document.getElementById('demo1');
+    const calSelect = document.getElementById('calSelect');
+    const localeSelect = document.getElementById('localeSelect');
+    const output1 = document.getElementById('output1');
+
+    calSelect.addEventListener('change', () => {
+      demo1.setAttribute('calendar', calSelect.value);
+    });
+    localeSelect.addEventListener('change', () => {
+      demo1.setAttribute('locale', localeSelect.value);
+    });
+
+    demo1.addEventListener('intl-select', (e) => {
+      output1.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 2: Range
+    const demo2 = document.getElementById('demo2');
+    const output2 = document.getElementById('output2');
+    demo2.addEventListener('intl-change', (e) => {
+      output2.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 3: External input
+    const demo3 = document.getElementById('demo3');
+    const output3 = document.getElementById('output3');
+    demo3.addEventListener('intl-select', (e) => {
+      output3.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    // Demo 4: Inline with min/max
+    const demo4 = document.getElementById('demo4');
+    const output4 = document.getElementById('output4');
+    const minInput = document.getElementById('minInput');
+    const maxInput = document.getElementById('maxInput');
+
+    demo4.addEventListener('intl-select', (e) => {
+      output4.textContent = JSON.stringify(e.detail, null, 2);
+    });
+
+    minInput.addEventListener('change', () => {
+      demo4.setAttribute('min', minInput.value);
+    });
+    maxInput.addEventListener('change', () => {
+      demo4.setAttribute('max', maxInput.value);
+    });
+  </script>
+</body>
+</html>

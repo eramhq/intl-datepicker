@@ -1,0 +1,60 @@
+{
+  "name": "intl-datepicker",
+  "version": "0.1.0",
+  "description": "Framework-agnostic multi-calendar datepicker Web Component powered by Intl.DateTimeFormat",
+  "type": "module",
+  "main": "dist/intl-datepicker.js",
+  "module": "dist/intl-datepicker.js",
+  "exports": {
+    ".": {
+      "import": "./dist/intl-datepicker.js"
+    },
+    "./react": {
+      "import": "./dist/react/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@internationalized/date": "^3.12.0",
+    "@floating-ui/dom": "^1.7.6"
+  },
+  "devDependencies": {
+    "vite": "^6.3.1",
+    "vitest": "^3.1.1",
+    "jsdom": "^26.1.0"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "datepicker",
+    "calendar",
+    "persian",
+    "jalali",
+    "islamic",
+    "hebrew",
+    "web-component",
+    "intl",
+    "i18n",
+    "multi-calendar"
+  ],
+  "license": "MIT",
+  "author": "Navid Kashani",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/navidkashani/intl-datepicker"
+  }
+}
