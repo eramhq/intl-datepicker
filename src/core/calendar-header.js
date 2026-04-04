@@ -81,11 +81,13 @@ export function renderYearGrid(state) {
 
   for (let y = decadeStart; y < decadeStart + 20; y++) {
     const isCurrent = y === state.viewYear;
+    const isDisabled = (state.min && y < state.min.year) || (state.max && y > state.max.year);
     const classes = ['idp-year-cell'];
     if (isCurrent) classes.push('selected');
 
     html += `<button class="${classes.join(' ')}" data-action="select-year" data-year="${y}" type="button" role="gridcell"
-      ${isCurrent ? 'aria-selected="true"' : ''}>${y}</button>`;
+      ${isCurrent ? 'aria-selected="true"' : ''}
+      ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${y}</button>`;
   }
 
   html += '</div>';
@@ -101,11 +103,15 @@ export function renderMonthGrid(state) {
 
   for (const month of months) {
     const isCurrent = month.value === state.viewMonth;
+    const isDisabled =
+      (state.min && (state.viewYear < state.min.year || (state.viewYear === state.min.year && month.value < state.min.month))) ||
+      (state.max && (state.viewYear > state.max.year || (state.viewYear === state.max.year && month.value > state.max.month)));
     const classes = ['idp-month-cell'];
     if (isCurrent) classes.push('selected');
 
     html += `<button class="${classes.join(' ')}" data-action="select-month" data-month="${month.value}" type="button" role="gridcell"
-      ${isCurrent ? 'aria-selected="true"' : ''}>${month.label}</button>`;
+      ${isCurrent ? 'aria-selected="true"' : ''}
+      ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${month.label}</button>`;
   }
 
   html += '</div>';

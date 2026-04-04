@@ -8,7 +8,7 @@ import {
   today,
 } from '@internationalized/date';
 import { getCalendar } from './locale.js';
-import { isDateDisabled, isInRange, isRangeEdge } from './state.js';
+import { isDateDisabled, isInRange, isRangeEdge, getHoveredWeekBounds } from './state.js';
 import { calendarDateToNative, resolveIntlCalendar, getTimeZone } from '../utils/common.js';
 
 /**
@@ -25,6 +25,9 @@ export function generateMonthGrid(state) {
   const tz = getTimeZone();
   const todayDate = toCalendar(today(tz), calendar);
 
+  // Precompute week hover bounds once per render (avoids 84+ startOfWeek/endOfWeek calls)
+  const weekBounds = getHoveredWeekBounds(state);
+
   const grid = [];
   let current = weekStart;
 
@@ -40,8 +43,8 @@ export function generateMonthGrid(state) {
           : false;
       const isFocused = isSameDay(current, focusedDate);
       const disabled = isDateDisabled(state, current);
-      const inRange = isInRange(state, current);
-      const { isStart, isEnd } = isRangeEdge(state, current);
+      const inRange = isInRange(state, current, weekBounds);
+      const { isStart, isEnd } = isRangeEdge(state, current, weekBounds);
 
       week.push({
         date: current,

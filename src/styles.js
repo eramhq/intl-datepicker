@@ -56,6 +56,11 @@ styles.replaceSync(/* css */`
     outline-offset: -1px;
   }
 
+  .idp-input-wrapper:has(.idp-input[aria-invalid="true"]) {
+    border-color: #dc2626;
+    outline: 2px solid color-mix(in srgb, #dc2626 25%, transparent);
+  }
+
   :host([disabled]) .idp-input-wrapper {
     opacity: 0.5;
     cursor: not-allowed;
@@ -221,6 +226,18 @@ styles.replaceSync(/* css */`
   .idp-year-cell.selected {
     background: var(--idp-selected-bg);
     color: var(--idp-selected-text);
+  }
+
+  .idp-year-cell[aria-disabled="true"],
+  .idp-month-cell[aria-disabled="true"] {
+    color: var(--idp-disabled);
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .idp-year-cell[aria-disabled="true"]:hover,
+  .idp-month-cell[aria-disabled="true"]:hover {
+    background: none;
   }
 
   /* --- Month grid --- */
@@ -519,6 +536,10 @@ styles.replaceSync(/* css */`
   .idp-month-panel {
     flex: 1;
     min-width: 280px;
+  }
+
+  :host([dir="rtl"]) .idp-months-container {
+    flex-direction: row-reverse;
   }
 
   /* --- Responsive --- */

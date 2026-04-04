@@ -1,4 +1,4 @@
-import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek } from '@internationalized/date';
+import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
 import { styles, calendarIcon, clearIcon, chevronLeft, chevronRight } from './styles.js';
 import { resolveLocale, isRTL, getWeekdayNames } from './core/locale.js';
 import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelativeDate } from './utils/common.js';
@@ -14,6 +14,11 @@ import { parseInput } from './core/date-input.js';
 
 // Track the currently open instance to close others
 let openInstance = null;
+
+function parsePositiveInt(val) {
+  const n = parseInt(val);
+  return n > 0 ? n : null;
+}
 
 const FOOTER_LABELS = {
   en: { today: 'Today', clear: 'Clear' },
@@ -115,11 +120,26 @@ class IntlDatepicker extends HTMLElement {
         this._setupExternalInput();
         break;
       case 'date-separator':
-      case 'max-dates':
-      case 'sort-dates':
         this._render();
         this._updateFormValue();
         break;
+      case 'max-dates': {
+        this._state = updateState(this._state, { maxDates: parsePositiveInt(newVal) });
+        this._render();
+        this._updateFormValue();
+        break;
+      }
+      case 'sort-dates': {
+        const sorting = this.hasAttribute('sort-dates');
+        const changes = { sortDates: sorting };
+        if (sorting && this._state.selectedDates.length > 1) {
+          changes.selectedDates = [...this._state.selectedDates].sort((a, b) => a.compare(b));
+        }
+        this._state = updateState(this._state, changes);
+        this._render();
+        this._updateFormValue();
+        break;
+      }
       case 'months':
       case 'presets':
       case 'no-animation':
@@ -207,6 +227,16 @@ class IntlDatepicker extends HTMLElement {
       return {
         iso: dates.map(d => toISO(d)).join(','),
         dates: dates.map(d => ({ year: d.year, month: d.month, day: d.day })),
+        formatted: this.displayValue,
+      };
+    }
+
+    if (this._state?.type === 'week' && this._state.rangeStart && this._state.rangeEnd) {
+      const { year, week } = this._getISOWeek(this._state.rangeStart);
+      return {
+        iso: `${year}-W${String(week).padStart(2, '0')}`,
+        weekStart: { year: this._state.rangeStart.year, month: this._state.rangeStart.month, day: this._state.rangeStart.day },
+        weekEnd: { year: this._state.rangeEnd.year, month: this._state.rangeEnd.month, day: this._state.rangeEnd.day },
         formatted: this.displayValue,
       };
     }
@@ -355,6 +385,8 @@ class IntlDatepicker extends HTMLElement {
       }
     }
 
+    const maxDates = parsePositiveInt(this.getAttribute('max-dates'));
+
     this._state = createState({
       calendarId,
       locale,
@@ -367,6 +399,8 @@ class IntlDatepicker extends HTMLElement {
       disabledDatesFilter: this._disabledDatesFilter || null,
       disableWeekends: this.hasAttribute('disable-weekends'),
       isRTL: isRTL(locale),
+      maxDates,
+      sortDates: this.hasAttribute('sort-dates'),
     });
 
     // Cache formatters that depend on locale/calendar (avoid re-creation per cell)
@@ -431,6 +465,23 @@ class IntlDatepicker extends HTMLElement {
           });
         } catch { return; }
       }
+    } else if (this._state.type === 'week' && /^\d{4}-W\d{2}$/.test(isoValue)) {
+      const match = isoValue.match(/^(\d{4})-W(\d{2})$/);
+      const isoYear = parseInt(match[1]);
+      const weekNum = parseInt(match[2]);
+      if (weekNum < 1 || weekNum > 53) return;
+      // Jan 4 is always in week 1. Derive Monday of target week.
+      const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+      const jan4DayOfWeek = jan4.getUTCDay() || 7; // Mon=1..Sun=7
+      const mondayOfWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 86400000);
+      const targetMonday = new Date(mondayOfWeek1.getTime() + (weekNum - 1) * 7 * 86400000);
+      const gregDate = new CalendarDate(
+        targetMonday.getUTCFullYear(),
+        targetMonday.getUTCMonth() + 1,
+        targetMonday.getUTCDate(),
+      );
+      const calDate = toCalendar(gregDate, calendar);
+      this._state = selectDate(this._state, calDate);
     } else if (this._state.type === 'range' && isoValue.includes('/')) {
       const [startIso, endIso] = isoValue.split('/');
       const start = parseISOToCalendar(startIso, calendar);
@@ -580,7 +631,7 @@ class IntlDatepicker extends HTMLElement {
 
       inner += '<div class="idp-month-panel">';
       inner += this._renderMultiMonthHeader(headerTitle, isFirst, isLast, isRTL);
-      inner += this._renderDayGrid(panelState);
+      inner += this._renderDayGrid(panelState, headerTitle);
       inner += '</div>';
     }
     inner += '</div>';
@@ -616,7 +667,7 @@ class IntlDatepicker extends HTMLElement {
     const currentStart = this._state.rangeStart ? toISO(this._state.rangeStart) : '';
     const currentEnd = this._state.rangeEnd ? toISO(this._state.rangeEnd) : '';
 
-    let html = '<div class="idp-presets" part="presets">';
+    let html = '<div class="idp-presets" part="presets" role="group" aria-label="Date range presets">';
     for (const preset of presets) {
       if (!preset.label || !preset.value) continue;
       // Check if this preset matches current selection
@@ -712,7 +763,7 @@ class IntlDatepicker extends HTMLElement {
     return { chevronLeft, chevronRight };
   }
 
-  _renderDayGrid(overrideState) {
+  _renderDayGrid(overrideState, precomputedLabel) {
     const state = overrideState || this._state;
     const weekdays = getWeekdayNames(state.locale, 'narrow');
     const grid = generateMonthGrid(state);
@@ -722,14 +773,15 @@ class IntlDatepicker extends HTMLElement {
 
     let html = `<div class="idp-weekdays${showWeekNumbers ? ' idp-has-week-numbers' : ''}" role="row" style="grid-template-columns:repeat(${cols},1fr)">`;
     if (showWeekNumbers) {
-      html += '<div class="idp-weekday idp-week-number-header" role="columnheader">#</div>';
+      html += '<div class="idp-weekday idp-week-number-header" role="columnheader" aria-label="Week number">#</div>';
     }
     for (const wd of weekdays) {
       html += `<div class="idp-weekday" role="columnheader">${wd}</div>`;
     }
     html += '</div>';
 
-    html += `<div class="idp-days" role="grid" aria-label="Calendar" style="grid-template-columns:repeat(${cols},1fr)">`;
+    const gridLabel = precomputedLabel || formatMonthYear(state.viewYear, state.viewMonth, state.locale, state.calendarId);
+    html += `<div class="idp-days" role="grid" aria-label="${gridLabel}" style="grid-template-columns:repeat(${cols},1fr)">`;
 
     const mapDaysFn = this._mapDays;
 
@@ -846,13 +898,22 @@ class IntlDatepicker extends HTMLElement {
       if (!this.hasAttribute('allow-input')) return;
       const input = e.target.closest('.idp-input');
       if (!input) return;
+      // If focus is moving to a calendar button, skip — let the click handler do its job
+      if (e.relatedTarget && shadow.contains(e.relatedTarget)) return;
       const text = input.value.trim();
       if (!text) return;
       const parsed = parseInput(text, this._state.calendarId, this._state.locale);
       if (parsed && !isDateDisabled(this._state, parsed)) {
+        input.removeAttribute('aria-invalid');
         this._selectDate(parsed);
+      } else {
+        input.setAttribute('aria-invalid', 'true');
+        setTimeout(() => {
+          input.removeAttribute('aria-invalid');
+          input.value = this.displayValue;
+        }, 1500);
       }
-    }, true);
+    });
 
     // Keyboard on grid / month / year views
     shadow.addEventListener('keydown', (e) => {
@@ -877,25 +938,29 @@ class IntlDatepicker extends HTMLElement {
       this._handleGridKeydown(e);
     });
 
-    // Range hover preview — use a single mouseover handler for both
-    // setting and clearing hoveredDate (mouseleave doesn't fire on ShadowRoot)
-    if (this._state.type === 'range' || this._state.type === 'week') {
-      shadow.addEventListener('mouseover', (e) => {
-        if (this._state.type === 'week') return; // Week selects full week on click
-        if (!this._state.rangeStart || this._state.rangeEnd) return;
+    // Hover preview — always attached, checks type at event time for dynamic type changes
+    shadow.addEventListener('mouseover', (e) => {
+      const type = this._state.type;
+      const shouldTrackHover = type === 'week' ||
+        (type === 'range' && this._state.rangeStart && !this._state.rangeEnd);
+      if (!shouldTrackHover) return;
 
-        const dayBtn = e.target.closest('.idp-day');
-        if (dayBtn && !dayBtn.hasAttribute('aria-disabled')) {
-          const date = this._dateFromBtn(dayBtn);
-          this._state = updateState(this._state, { hoveredDate: date });
-          this._renderCalendarContent();
-        } else if (this._state.hoveredDate) {
-          // Mouse moved off the day grid — clear preview
-          this._state = updateState(this._state, { hoveredDate: null });
-          this._renderCalendarContent();
+      const dayBtn = e.target.closest('.idp-day');
+      if (dayBtn && !dayBtn.hasAttribute('aria-disabled')) {
+        const date = this._dateFromBtn(dayBtn);
+        // For week mode, skip re-render if still in the same week
+        if (type === 'week' && this._state.hoveredDate) {
+          const ws = startOfWeek(date, this._state.locale);
+          const prevWs = startOfWeek(this._state.hoveredDate, this._state.locale);
+          if (isSameDay(ws, prevWs)) return;
         }
-      });
-    }
+        this._state = updateState(this._state, { hoveredDate: date });
+        this._renderCalendarContent();
+      } else if (this._state.hoveredDate) {
+        this._state = updateState(this._state, { hoveredDate: null });
+        this._renderCalendarContent();
+      }
+    });
 
     // Handle slot changes for slotted input
     const slot = shadow.querySelector('slot[name="input"]');
@@ -943,6 +1008,7 @@ class IntlDatepicker extends HTMLElement {
         this._renderCalendarContent();
         break;
       case 'select-year': {
+        if (btn.hasAttribute('aria-disabled')) break;
         const year = parseInt(btn.dataset.year);
         if (this._state.type === 'year') {
           // Year-only mode: select and close
@@ -962,6 +1028,7 @@ class IntlDatepicker extends HTMLElement {
         break;
       }
       case 'select-month': {
+        if (btn.hasAttribute('aria-disabled')) break;
         const month = parseInt(btn.dataset.month);
         if (this._state.type === 'month') {
           // Month-only mode: select and close
@@ -1111,17 +1178,26 @@ class IntlDatepicker extends HTMLElement {
       const newDate = action === 'startOfWeek'
         ? startOfWeek(this._state.focusedDate, this._state.locale)
         : endOfWeek(this._state.focusedDate, this._state.locale);
+      const oldViewYear = this._state.viewYear;
+      const oldViewMonth = this._state.viewMonth;
       this._state = updateState(this._state, {
         focusedDate: newDate,
         viewYear: newDate.year,
         viewMonth: newDate.month,
       });
+      this._stabilizeMultiMonthView(oldViewYear, oldViewMonth);
       this._renderCalendarContent();
       this._focusCurrentDay();
       return;
     }
 
+    const isPageKey = e.key === 'PageUp' || e.key === 'PageDown';
+    const oldViewYear = this._state.viewYear;
+    const oldViewMonth = this._state.viewMonth;
     this._state = moveFocus(this._state, action);
+    if (!isPageKey) {
+      this._stabilizeMultiMonthView(oldViewYear, oldViewMonth);
+    }
     this._renderCalendarContent();
     this._focusCurrentDay();
   }
@@ -1203,6 +1279,26 @@ class IntlDatepicker extends HTMLElement {
       const focused = this.shadowRoot.querySelector('.idp-day[tabindex="0"]');
       if (focused) focused.focus();
     });
+  }
+
+  _stabilizeMultiMonthView(oldViewYear, oldViewMonth) {
+    const monthCount = this._getMonthCount();
+    if (monthCount <= 1) return;
+    const focused = this._state.focusedDate;
+    // Check if focused date falls within any of the visible panels
+    for (let i = 0; i < monthCount; i++) {
+      const panelDate = new CalendarDate(
+        this._state.calendar, oldViewYear, oldViewMonth, 1,
+      ).add({ months: i });
+      if (focused.year === panelDate.year && focused.month === panelDate.month) {
+        // Still within visible panels — restore the old view
+        this._state = updateState(this._state, {
+          viewYear: oldViewYear,
+          viewMonth: oldViewMonth,
+        });
+        return;
+      }
+    }
   }
 
   _shouldAnimate() {

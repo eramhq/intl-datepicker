@@ -3,7 +3,7 @@ import { CalendarDate, toCalendar } from '@internationalized/date';
 import {
   createState, updateState, selectDate, moveFocus,
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
-  isInRange, getDayOfWeek, getWeekendDays,
+  isInRange, isRangeEdge, getHoveredWeekBounds, getDayOfWeek, getWeekendDays,
 } from '../state.js';
 import { getCalendar } from '../locale.js';
 
@@ -435,5 +435,83 @@ describe('resolveRelativeDate (Phase 6)', () => {
     const cal = getCalendar('gregory');
     const result = resolveRelativeDate('invalid', cal, null, null);
     expect(result).toBeNull();
+  });
+});
+
+describe('maxDates from createState options', () => {
+  it('accepts maxDates option', () => {
+    const state = createState({ type: 'multiple', maxDates: 3 });
+    expect(state.maxDates).toBe(3);
+  });
+
+  it('defaults maxDates to null', () => {
+    const state = createState({ type: 'multiple' });
+    expect(state.maxDates).toBeNull();
+  });
+
+  it('enforces maxDates limit', () => {
+    const state = createState({ type: 'multiple', maxDates: 2 });
+    let s = selectDate(state, new CalendarDate(2024, 3, 15));
+    s = selectDate(s, new CalendarDate(2024, 3, 20));
+    s = selectDate(s, new CalendarDate(2024, 3, 25));
+    expect(s.selectedDates.length).toBe(2);
+  });
+});
+
+describe('sortDates', () => {
+  it('sorts selected dates when sortDates is true', () => {
+    const state = createState({ type: 'multiple', sortDates: true });
+    let s = selectDate(state, new CalendarDate(2024, 3, 25));
+    s = selectDate(s, new CalendarDate(2024, 3, 10));
+    s = selectDate(s, new CalendarDate(2024, 3, 15));
+    expect(s.selectedDates[0].day).toBe(10);
+    expect(s.selectedDates[1].day).toBe(15);
+    expect(s.selectedDates[2].day).toBe(25);
+  });
+
+  it('does not sort when sortDates is false', () => {
+    const state = createState({ type: 'multiple', sortDates: false });
+    let s = selectDate(state, new CalendarDate(2024, 3, 25));
+    s = selectDate(s, new CalendarDate(2024, 3, 10));
+    expect(s.selectedDates[0].day).toBe(25);
+    expect(s.selectedDates[1].day).toBe(10);
+  });
+});
+
+describe('week hover preview', () => {
+  it('isInRange returns true for hovered week dates before selection', () => {
+    const state = createState({ type: 'week', locale: 'en-US' });
+    const hovered = new CalendarDate(2024, 3, 13);
+    const s = updateState(state, { hoveredDate: hovered });
+    const wb = getHoveredWeekBounds(s);
+
+    expect(isInRange(s, new CalendarDate(2024, 3, 11), wb)).toBe(true); // Mon
+    expect(isInRange(s, new CalendarDate(2024, 3, 15), wb)).toBe(true); // Fri
+    expect(isInRange(s, new CalendarDate(2024, 3, 18), wb)).toBe(false);
+  });
+
+  it('isRangeEdge returns edges for hovered week', () => {
+    const state = createState({ type: 'week', locale: 'en-US' });
+    const hovered = new CalendarDate(2024, 3, 13);
+    const s = updateState(state, { hoveredDate: hovered });
+    const wb = getHoveredWeekBounds(s);
+
+    // en-US week starts Sunday
+    const { isStart: startSun } = isRangeEdge(s, new CalendarDate(2024, 3, 10), wb);
+    const { isEnd: endSat } = isRangeEdge(s, new CalendarDate(2024, 3, 16), wb);
+    expect(startSun).toBe(true);
+    expect(endSat).toBe(true);
+  });
+
+  it('getHoveredWeekBounds returns null when no hover or already selected', () => {
+    const state = createState({ type: 'week', locale: 'en-US' });
+    expect(getHoveredWeekBounds(state)).toBeNull();
+
+    // With rangeStart set, should also return null
+    const s = updateState(state, {
+      hoveredDate: new CalendarDate(2024, 3, 13),
+      rangeStart: new CalendarDate(2024, 3, 10),
+    });
+    expect(getHoveredWeekBounds(s)).toBeNull();
   });
 });

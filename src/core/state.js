@@ -18,6 +18,8 @@ export function createState(options = {}) {
     disabledDatesFilter = null,
     disableWeekends = false,
     isRTL = false,
+    maxDates = null,
+    sortDates = false,
   } = options;
 
   const calendar = getCalendar(calendarId);
@@ -71,7 +73,8 @@ export function createState(options = {}) {
     disableWeekends,
     _weekendDays: disableWeekends ? getWeekendDays(locale) : [],
     _isRTL: isRTL,
-    maxDates: null,
+    maxDates: maxDates || null,
+    sortDates,
   };
 }
 
@@ -132,6 +135,9 @@ export function selectDate(state, date) {
         return state;
       }
       newDates = [...existing, date];
+    }
+    if (state.sortDates) {
+      newDates.sort((a, b) => a.compare(b));
     }
     return updateState(state, {
       selectedDates: newDates,
@@ -211,10 +217,27 @@ export function getWeekendDays(locale) {
 }
 
 /**
+ * Get week boundaries for hover preview (before any selection is made).
+ * Returns { start, end } or null. Callers should cache per render pass.
+ */
+export function getHoveredWeekBounds(state) {
+  if (state.type !== 'week' || !state.hoveredDate || state.rangeStart) return null;
+  return {
+    start: startOfWeek(state.hoveredDate, state.locale),
+    end: endOfWeek(state.hoveredDate, state.locale),
+  };
+}
+
+/**
  * Check if a date is in the selected range (for range type).
  */
-export function isInRange(state, date) {
+export function isInRange(state, date, weekBounds) {
   if (state.type !== 'range' && state.type !== 'week') return false;
+
+  if (weekBounds) {
+    return date.compare(weekBounds.start) >= 0 && date.compare(weekBounds.end) <= 0;
+  }
+
   const start = state.rangeStart;
   const end = state.rangeEnd || state.hoveredDate;
   if (!start || !end) return false;
@@ -228,8 +251,16 @@ export function isInRange(state, date) {
 /**
  * Check if a date is the range start or end.
  */
-export function isRangeEdge(state, date) {
+export function isRangeEdge(state, date, weekBounds) {
   if (state.type !== 'range' && state.type !== 'week') return { isStart: false, isEnd: false };
+
+  if (weekBounds) {
+    return {
+      isStart: isSameDay(date, weekBounds.start),
+      isEnd: isSameDay(date, weekBounds.end),
+    };
+  }
+
   const end = state.rangeEnd || state.hoveredDate;
   return {
     isStart: state.rangeStart && isSameDay(date, state.rangeStart),
