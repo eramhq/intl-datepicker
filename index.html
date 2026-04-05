@@ -922,43 +922,26 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
 
     // ── Format output ──────────────────────────────────────────────
     function formatOutput(detail) {
-      if (!detail || detail.iso === undefined) return 'No selection';
-      if (detail.iso === '') return 'Cleared';
+      if (!detail || !detail.type) return 'No selection';
+      if (!detail.value) return 'Cleared';
 
-      // Range (including week internally completing as range)
-      if (detail.rangeStart && detail.rangeEnd) {
-        const [start, end] = detail.iso.split('/');
-        return `Range:     ${start} \u2192 ${end}\nFormatted: ${detail.formatted}`;
-      }
+      const lines = [`Type:      ${detail.type}`];
 
-      // Incomplete range (first date selected)
-      if (detail.rangeStart && !detail.rangeEnd) {
-        return `Range:     ${detail.iso} \u2192 \u2026\nFormatted: ${detail.formatted}`;
-      }
-
-      // Week
-      if (detail.weekStart && detail.weekEnd) {
-        return `Week:      ${detail.iso}\nFormatted: ${detail.formatted}`;
-      }
-
-      // Multiple
-      if (detail.dates) {
+      if (detail.type === 'range') {
+        const [s, e] = detail.value.split('/');
+        lines.push(e ? `Range:     ${s} \u2192 ${e}` : `Range:     ${s} \u2192 \u2026`);
+      } else if (detail.type === 'week') {
+        lines.push(`Week:      ${detail.value}`);
+      } else if (detail.type === 'multiple') {
         const n = detail.dates.length;
-        return `Count:     ${n} date${n !== 1 ? 's' : ''}\nISO:       ${detail.iso}\nFormatted: ${detail.formatted}`;
+        lines.push(`Count:     ${n} date${n !== 1 ? 's' : ''}`);
+        lines.push(`Value:     ${detail.value}`);
+      } else {
+        lines.push(`Value:     ${detail.value}`);
       }
 
-      // Month (iso like 2024-06, calendar has year+month but no day)
-      if (detail.calendar && detail.calendar.month !== undefined && detail.calendar.day === undefined) {
-        return `Month:     ${detail.iso}\nFormatted: ${detail.formatted}`;
-      }
-
-      // Year (iso is just a number string, calendar has year only)
-      if (detail.calendar && detail.calendar.year !== undefined && detail.calendar.month === undefined) {
-        return `Year:      ${detail.iso}\nFormatted: ${detail.formatted}`;
-      }
-
-      // Single date
-      return `ISO:       ${detail.iso}\nFormatted: ${detail.formatted}`;
+      lines.push(`Formatted: ${detail.formatted}`);
+      return lines.join('\n');
     }
 
     // ── Auto-wire output displays ──────────────────────────────────

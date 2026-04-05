@@ -220,64 +220,82 @@ class IntlDatepicker extends HTMLElement {
     return this._state?.rangeEnd ? toISO(this._state.rangeEnd) : null;
   }
 
-  getValue() {
-    if (this._state?.type === 'multiple') {
+  // Value strings are computed by the `value` getter; _buildDetail delegates to it
+  // so the two cannot drift. This method adds the structured sub-objects
+  // (calendar/start/end/dates) and the `formatted` display string on top.
+  _buildDetail() {
+    const t = this._state?.type;
+    const empty = (type) => ({ type, value: '', calendar: null, formatted: '' });
+
+    if (t === 'multiple') {
       const dates = this._state.selectedDates || [];
-      if (dates.length === 0) return null;
+      if (dates.length === 0) return empty('multiple');
       return {
-        iso: dates.map(d => toISO(d)).join(','),
+        type: 'multiple',
+        value: this.value,
         dates: dates.map(d => ({ year: d.year, month: d.month, day: d.day })),
         formatted: this.displayValue,
       };
     }
 
-    if (this._state?.type === 'week' && this._state.rangeStart && this._state.rangeEnd) {
-      const { year, week } = this._getISOWeek(this._state.rangeStart);
+    if (t === 'week' && this._state.rangeStart && this._state.rangeEnd) {
+      const s = this._state.rangeStart, e = this._state.rangeEnd;
       return {
-        iso: `${year}-W${String(week).padStart(2, '0')}`,
-        weekStart: { year: this._state.rangeStart.year, month: this._state.rangeStart.month, day: this._state.rangeStart.day },
-        weekEnd: { year: this._state.rangeEnd.year, month: this._state.rangeEnd.month, day: this._state.rangeEnd.day },
+        type: 'week',
+        value: this.value,
+        start: { year: s.year, month: s.month, day: s.day },
+        end:   { year: e.year, month: e.month, day: e.day },
         formatted: this.displayValue,
       };
     }
 
-    if (!this._state?.selectedDate && !this._state?.rangeStart) return null;
+    if (t === 'range' && this._state.rangeStart) {
+      const s = this._state.rangeStart, e = this._state.rangeEnd;
+      return {
+        type: 'range',
+        value: this.value,
+        start: { year: s.year, month: s.month, day: s.day },
+        end: e ? { year: e.year, month: e.month, day: e.day } : null,
+        formatted: this.displayValue,
+      };
+    }
 
-    if (this._state.type === 'month' && this._state.selectedDate) {
+    if (t === 'month' && this._state.selectedDate) {
       const d = this._state.selectedDate;
       return {
-        iso: `${String(d.year).padStart(4, '0')}-${String(d.month).padStart(2, '0')}`,
+        type: 'month',
+        value: this.value,
         calendar: { year: d.year, month: d.month },
         formatted: this.displayValue,
       };
     }
 
-    if (this._state.type === 'year' && this._state.selectedDate) {
+    if (t === 'year' && this._state.selectedDate) {
       const d = this._state.selectedDate;
       return {
-        iso: String(d.year),
+        type: 'year',
+        value: this.value,
         calendar: { year: d.year },
         formatted: this.displayValue,
       };
     }
 
-    if (this._state.type === 'range' && this._state.rangeStart) {
-      const s = this._state.rangeStart;
-      const e = this._state.rangeEnd;
+    if (this._state?.selectedDate) {
+      const d = this._state.selectedDate;
       return {
-        iso: e ? `${toISO(s)}/${toISO(e)}` : toISO(s),
-        rangeStart: { year: s.year, month: s.month, day: s.day },
-        rangeEnd: e ? { year: e.year, month: e.month, day: e.day } : null,
+        type: 'date',
+        value: this.value,
+        calendar: { year: d.year, month: d.month, day: d.day },
         formatted: this.displayValue,
       };
     }
 
-    const date = this._state.selectedDate;
-    return {
-      iso: toISO(date),
-      calendar: { year: date.year, month: date.month, day: date.day },
-      formatted: this.displayValue,
-    };
+    return empty(t || 'date');
+  }
+
+  getValue() {
+    const d = this._buildDetail();
+    return d.value ? d : null;
   }
 
   setValue(isoDate) {
@@ -294,7 +312,7 @@ class IntlDatepicker extends HTMLElement {
     this._render();
     this._updateFormValue();
     this._updateExternalInput();
-    this._emit('intl-change', { iso: '', calendar: null, formatted: '' });
+    this._emit('intl-change', this._buildDetail());
   }
 
   open() {
@@ -509,7 +527,7 @@ class IntlDatepicker extends HTMLElement {
     this._updateExternalInput();
 
     if (emitEvent) {
-      this._emit('intl-change', this.getValue() || { iso: '', calendar: null, formatted: '' });
+      this._emit('intl-change', this._buildDetail());
     }
   }
 
@@ -708,12 +726,7 @@ class IntlDatepicker extends HTMLElement {
     this._updateFormValue();
     this._updateExternalInput();
 
-    const detail = {
-      iso: `${toISO(start)}/${toISO(end)}`,
-      rangeStart: { year: start.year, month: start.month, day: start.day },
-      rangeEnd: { year: end.year, month: end.month, day: end.day },
-      formatted: this.displayValue,
-    };
+    const detail = this._buildDetail();
     this._emit('intl-select', detail);
     this._emit('intl-change', detail);
   }
@@ -1021,7 +1034,7 @@ class IntlDatepicker extends HTMLElement {
           this._render();
           this._updateFormValue();
           this._updateExternalInput();
-          const detail = { iso: String(year), calendar: { year }, formatted: this._formatYearDisplay(year) };
+          const detail = this._buildDetail();
           this._emit('intl-select', detail);
           this._emit('intl-change', detail);
           if (!this._state.inline) setTimeout(() => this._closeCalendar(), 150);
@@ -1044,8 +1057,7 @@ class IntlDatepicker extends HTMLElement {
           this._render();
           this._updateFormValue();
           this._updateExternalInput();
-          const isoMonth = `${String(this._state.viewYear).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
-          const detail = { iso: isoMonth, calendar: { year: this._state.viewYear, month }, formatted: this.displayValue };
+          const detail = this._buildDetail();
           this._emit('intl-select', detail);
           this._emit('intl-change', detail);
           if (!this._state.inline) setTimeout(() => this._closeCalendar(), 150);
@@ -1102,7 +1114,7 @@ class IntlDatepicker extends HTMLElement {
     this._updateFormValue();
     this._updateExternalInput();
 
-    const detail = this.getValue() || { iso: '', calendar: null, formatted: '' };
+    const detail = this._buildDetail();
     this._emit('intl-select', detail);
     this._emit('intl-change', detail);
 
@@ -1526,6 +1538,13 @@ class IntlDatepicker extends HTMLElement {
     }
   }
 
+  // Returns ISO 8601 week-year and week number (Monday-based, Gregorian).
+  // Note: for non-Monday-start locales (e.g. Persian fa-IR uses Saturday-start),
+  // the event detail's `start`/`end` reflect the user-selected 7-day window
+  // (Saturday–Friday) which may represent a *different* 7-day span than `value:'YYYY-Www'`,
+  // which always follows ISO 8601 (the Monday-based week containing the Thursday).
+  // `start`/`end` are authoritative for the selection; `value` is the ISO week identifier.
+  // Also: late December / early January can shift year (Dec 29 → W01 of next year).
   _getISOWeek(date) {
     try {
       const native = calendarDateToNative(date);
