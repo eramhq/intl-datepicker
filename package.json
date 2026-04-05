@@ -5,11 +5,14 @@
   "type": "module",
   "main": "dist/intl-datepicker.js",
   "module": "dist/intl-datepicker.js",
+  "types": "dist/intl-datepicker.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/intl-datepicker.d.ts",
       "import": "./dist/intl-datepicker.js"
     },
     "./react": {
+      "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
     }
   },

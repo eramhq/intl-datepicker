@@ -23,16 +23,16 @@ export function renderHeader(state, view) {
   const headerTitle = formatMonthYear(viewYear, viewMonth, locale, calendarId);
 
   return `
-    <div class="idp-header" role="group" aria-label="Calendar navigation">
-      <button class="idp-nav-btn" data-action="prev-month" aria-label="Previous month" type="button">
+    <div class="idp-header" part="header" role="group" aria-label="Calendar navigation">
+      <button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="Previous month" type="button">
         ${prevArrow}
       </button>
-      <div class="idp-header-title">
+      <div class="idp-header-title" part="header-title">
         <button class="idp-header-btn" data-action="show-months" type="button" aria-label="Select month">
           ${headerTitle} ${chevronDown}
         </button>
       </div>
-      <button class="idp-nav-btn" data-action="next-month" aria-label="Next month" type="button">
+      <button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="Next month" type="button">
         ${nextArrow}
       </button>
     </div>
@@ -44,16 +44,16 @@ function renderYearViewHeader(state, prevArrow, nextArrow) {
   const decadeEnd = decadeStart + 19;
 
   return `
-    <div class="idp-header" role="group" aria-label="Year navigation">
-      <button class="idp-nav-btn" data-action="prev-decade" aria-label="Previous 20 years" type="button">
+    <div class="idp-header" part="header" role="group" aria-label="Year navigation">
+      <button class="idp-nav-btn" part="nav-prev" data-action="prev-decade" aria-label="Previous 20 years" type="button">
         ${prevArrow}
       </button>
-      <div class="idp-header-title">
+      <div class="idp-header-title" part="header-title">
         <button class="idp-header-btn" data-action="show-days" type="button">
           ${decadeStart} – ${decadeEnd}
         </button>
       </div>
-      <button class="idp-nav-btn" data-action="next-decade" aria-label="Next 20 years" type="button">
+      <button class="idp-nav-btn" part="nav-next" data-action="next-decade" aria-label="Next 20 years" type="button">
         ${nextArrow}
       </button>
     </div>
@@ -62,8 +62,8 @@ function renderYearViewHeader(state, prevArrow, nextArrow) {
 
 function renderMonthViewHeader(state) {
   return `
-    <div class="idp-header" role="group" aria-label="Month selection">
-      <div class="idp-header-title">
+    <div class="idp-header" part="header" role="group" aria-label="Month selection">
+      <div class="idp-header-title" part="header-title">
         <button class="idp-header-btn" data-action="show-years" type="button" aria-label="Select year">
           ${state.viewYear} ${chevronDown}
         </button>
@@ -85,7 +85,7 @@ export function renderYearGrid(state) {
     const classes = ['idp-year-cell'];
     if (isCurrent) classes.push('selected');
 
-    html += `<button class="${classes.join(' ')}" data-action="select-year" data-year="${y}" type="button" role="gridcell"
+    html += `<button class="${classes.join(' ')}" part="year-cell" data-action="select-year" data-year="${y}" type="button" role="gridcell"
       ${isCurrent ? 'aria-selected="true"' : ''}
       ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${y}</button>`;
   }
@@ -109,7 +109,7 @@ export function renderMonthGrid(state) {
     const classes = ['idp-month-cell'];
     if (isCurrent) classes.push('selected');
 
-    html += `<button class="${classes.join(' ')}" data-action="select-month" data-month="${month.value}" type="button" role="gridcell"
+    html += `<button class="${classes.join(' ')}" part="month-cell" data-action="select-month" data-month="${month.value}" type="button" role="gridcell"
       ${isCurrent ? 'aria-selected="true"' : ''}
       ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${month.label}</button>`;
   }

@@ -15,9 +15,15 @@ import { parseInput } from './core/date-input.js';
 // Track the currently open instance to close others
 let openInstance = null;
 
+const VALID_TYPES = ['date', 'range', 'week', 'multiple', 'month', 'year'];
+
 function parsePositiveInt(val) {
   const n = parseInt(val);
   return n > 0 ? n : null;
+}
+
+function toPlainDate(d) {
+  return { year: d.year, month: d.month, day: d.day };
 }
 
 const FOOTER_LABELS = {
@@ -225,7 +231,12 @@ class IntlDatepicker extends HTMLElement {
   // (calendar/start/end/dates) and the `formatted` display string on top.
   _buildDetail() {
     const t = this._state?.type;
-    const empty = (type) => ({ type, value: '', calendar: null, formatted: '' });
+    const empty = (type) => {
+      const base = { type, value: '', formatted: '' };
+      if (type === 'multiple') return { ...base, dates: [] };
+      if (type === 'range' || type === 'week') return { ...base, start: null, end: null };
+      return { ...base, calendar: null };
+    };
 
     if (t === 'multiple') {
       const dates = this._state.selectedDates || [];
@@ -233,29 +244,28 @@ class IntlDatepicker extends HTMLElement {
       return {
         type: 'multiple',
         value: this.value,
-        dates: dates.map(d => ({ year: d.year, month: d.month, day: d.day })),
+        dates: dates.map(toPlainDate),
         formatted: this.displayValue,
       };
     }
 
     if (t === 'week' && this._state.rangeStart && this._state.rangeEnd) {
-      const s = this._state.rangeStart, e = this._state.rangeEnd;
       return {
         type: 'week',
         value: this.value,
-        start: { year: s.year, month: s.month, day: s.day },
-        end:   { year: e.year, month: e.month, day: e.day },
+        start: toPlainDate(this._state.rangeStart),
+        end: toPlainDate(this._state.rangeEnd),
         formatted: this.displayValue,
       };
     }
 
     if (t === 'range' && this._state.rangeStart) {
-      const s = this._state.rangeStart, e = this._state.rangeEnd;
+      const e = this._state.rangeEnd;
       return {
         type: 'range',
         value: this.value,
-        start: { year: s.year, month: s.month, day: s.day },
-        end: e ? { year: e.year, month: e.month, day: e.day } : null,
+        start: toPlainDate(this._state.rangeStart),
+        end: e ? toPlainDate(e) : null,
         formatted: this.displayValue,
       };
     }
@@ -271,21 +281,19 @@ class IntlDatepicker extends HTMLElement {
     }
 
     if (t === 'year' && this._state.selectedDate) {
-      const d = this._state.selectedDate;
       return {
         type: 'year',
         value: this.value,
-        calendar: { year: d.year },
+        calendar: { year: this._state.selectedDate.year },
         formatted: this.displayValue,
       };
     }
 
     if (this._state?.selectedDate) {
-      const d = this._state.selectedDate;
       return {
         type: 'date',
         value: this.value,
-        calendar: { year: d.year, month: d.month, day: d.day },
+        calendar: toPlainDate(this._state.selectedDate),
         formatted: this.displayValue,
       };
     }
@@ -365,6 +373,9 @@ class IntlDatepicker extends HTMLElement {
     }
   }
 
+  get isDateDisabled() { return this.disabledDatesFilter; }
+  set isDateDisabled(fn) { this.disabledDatesFilter = fn; }
+
   // --- Form callbacks ---
 
   get form() { return this._internals?.form; }
@@ -405,11 +416,17 @@ class IntlDatepicker extends HTMLElement {
 
     const maxDates = parsePositiveInt(this.getAttribute('max-dates'));
 
+    const type = this.getAttribute('type') || 'date';
+    const isValidType = VALID_TYPES.includes(type);
+    if (!isValidType) {
+      console.warn(`[intl-datepicker] Unknown type="${type}". Valid types: ${VALID_TYPES.join(', ')}. Falling back to "date".`);
+    }
+
     this._state = createState({
       calendarId,
       locale,
       value: this.getAttribute('value') || null,
-      type: this.getAttribute('type') || 'date',
+      type: isValidType ? type : 'date',
       min: this.getAttribute('min') || null,
       max: this.getAttribute('max') || null,
       inline: this.hasAttribute('inline'),
@@ -661,9 +678,9 @@ class IntlDatepicker extends HTMLElement {
     const todayLabel = this._getLocalizedLabel('today');
     const clearLabel = this._getLocalizedLabel('clear');
     let html = `
-      <div class="idp-footer">
-        <button class="idp-footer-btn" data-action="today" type="button">${todayLabel}</button>
-        <button class="idp-footer-btn" data-action="clear" type="button">${clearLabel}</button>
+      <div class="idp-footer" part="footer">
+        <button class="idp-footer-btn" part="today-btn" data-action="today" type="button">${todayLabel}</button>
+        <button class="idp-footer-btn" part="clear-btn" data-action="clear" type="button">${clearLabel}</button>
       </div>
     `;
 
@@ -756,16 +773,16 @@ class IntlDatepicker extends HTMLElement {
   _renderMultiMonthHeader(title, isFirst, isLast, isRTL) {
     const { chevronLeft: chL, chevronRight: chR } = this._getChevrons();
     const prevBtn = isFirst
-      ? `<button class="idp-nav-btn" data-action="prev-month" aria-label="Previous month" type="button">${isRTL ? chR : chL}</button>`
+      ? `<button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="Previous month" type="button">${isRTL ? chR : chL}</button>`
       : '<span class="idp-nav-btn" style="visibility:hidden"></span>';
     const nextBtn = isLast
-      ? `<button class="idp-nav-btn" data-action="next-month" aria-label="Next month" type="button">${isRTL ? chL : chR}</button>`
+      ? `<button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="Next month" type="button">${isRTL ? chL : chR}</button>`
       : '<span class="idp-nav-btn" style="visibility:hidden"></span>';
 
     return `
-      <div class="idp-header" role="group">
+      <div class="idp-header" part="header" role="group">
         ${prevBtn}
-        <div class="idp-header-title">
+        <div class="idp-header-title" part="header-title">
           <span class="idp-header-btn">${title}</span>
         </div>
         ${nextBtn}
@@ -790,7 +807,7 @@ class IntlDatepicker extends HTMLElement {
       html += '<div class="idp-weekday idp-week-number-header" role="columnheader" aria-label="Week number">#</div>';
     }
     for (const wd of weekdays) {
-      html += `<div class="idp-weekday" role="columnheader">${wd}</div>`;
+      html += `<div class="idp-weekday" part="weekday" role="columnheader">${wd}</div>`;
     }
     html += '</div>';
 

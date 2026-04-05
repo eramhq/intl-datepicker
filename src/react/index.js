@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { createElement, forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 // Ensure the web component is registered
 import '../intl-datepicker.js';
@@ -107,7 +107,7 @@ const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
     }
   });
 
-  return React.createElement('intl-datepicker', { ref: elRef });
+  return createElement('intl-datepicker', { ref: elRef });
 });
 
 IntlDatepicker.displayName = 'IntlDatepicker';
