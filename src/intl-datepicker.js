@@ -699,6 +699,7 @@ class IntlDatepicker extends HTMLElement {
     this._state = updateState(this._state, {
       rangeStart: start,
       rangeEnd: end,
+      hoveredDate: null,
       viewYear: start.year,
       viewMonth: start.month,
     });
@@ -866,9 +867,12 @@ class IntlDatepicker extends HTMLElement {
 
     const showAlternate = this.hasAttribute('show-alternate');
     const inner = this._renderCalendarInner(showAlternate);
-    // Keep the calendar element, update its innerHTML
+    // Target .idp-calendar-main when presets exist to preserve the sidebar
+    const target = this.hasAttribute('presets')
+      ? (calendarEl.querySelector('.idp-calendar-main') || calendarEl)
+      : calendarEl;
     const hidden = calendarEl.hasAttribute('hidden');
-    calendarEl.innerHTML = `<div aria-live="polite" class="idp-sr-only" id="idp-live"></div>${inner}`;
+    target.innerHTML = `<div aria-live="polite" class="idp-sr-only" id="idp-live"></div>${inner}`;
     if (hidden) calendarEl.setAttribute('hidden', '');
 
     this._announceMonth();
@@ -1350,11 +1354,14 @@ class IntlDatepicker extends HTMLElement {
       calendar.addEventListener('animationend', onEnd);
     }
 
-    document.addEventListener('click', this._boundClose);
     document.addEventListener('keydown', this._boundKeydown);
-
-    // Focus the selected/today cell
-    requestAnimationFrame(() => this._focusCurrentDay());
+    requestAnimationFrame(() => {
+      if (this._state.isOpen) {
+        document.addEventListener('click', this._boundClose);
+      }
+      const focused = this.shadowRoot.querySelector('.idp-day[tabindex="0"]');
+      if (focused) focused.focus();
+    });
   }
 
   _closeCalendar() {
@@ -1394,8 +1401,10 @@ class IntlDatepicker extends HTMLElement {
     if (openInstance === this) openInstance = null;
 
     // Return focus to input
+    this._closingCalendar = true;
     const trigger = this.shadowRoot.querySelector('.idp-input') || this._externalInput;
     if (trigger) trigger.focus();
+    this._closingCalendar = false;
   }
 
   _onOutsideClick(e) {
@@ -1412,12 +1421,14 @@ class IntlDatepicker extends HTMLElement {
   }
 
   _cleanupExternalInput() {
-    if (this._externalInput && this._boundExternalClick) {
-      this._externalInput.removeEventListener('click', this._boundExternalClick);
-      this._externalInput.removeEventListener('focus', this._boundExternalFocus);
+    if (this._externalInput) {
+      if (this._boundExternalClick) this._externalInput.removeEventListener('click', this._boundExternalClick);
+      if (this._boundExternalFocus) this._externalInput.removeEventListener('focus', this._boundExternalFocus);
+      if (this._boundExternalMousedown) this._externalInput.removeEventListener('mousedown', this._boundExternalMousedown);
     }
     this._boundExternalClick = null;
     this._boundExternalFocus = null;
+    this._boundExternalMousedown = null;
   }
 
   _setupExternalInput() {
@@ -1433,16 +1444,22 @@ class IntlDatepicker extends HTMLElement {
     if (!input) return;
 
     this._externalInput = input;
-    this._boundExternalClick = () => {
-      if (!this.hasAttribute('disabled')) {
-        this._state.isOpen ? this._closeCalendar() : this._openCalendar();
-      }
+    this._boundExternalMousedown = () => {
+      this._mouseActivated = true;
     };
     this._boundExternalFocus = () => {
-      if (!this.hasAttribute('disabled') && !this._state.isOpen) {
-        this._openCalendar();
-      }
+      // Only open on keyboard/programmatic focus — mouse clicks handled via click handler
+      const byMouse = this._mouseActivated;
+      this._mouseActivated = false;
+      if (byMouse || this.hasAttribute('disabled') || this._state.isOpen || this._closingCalendar) return;
+      this._openCalendar();
     };
+    this._boundExternalClick = () => {
+      this._mouseActivated = false;
+      if (this.hasAttribute('disabled')) return;
+      this._state.isOpen ? this._closeCalendar() : this._openCalendar();
+    };
+    input.addEventListener('mousedown', this._boundExternalMousedown);
     input.addEventListener('click', this._boundExternalClick);
     input.addEventListener('focus', this._boundExternalFocus);
 

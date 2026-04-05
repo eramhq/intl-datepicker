@@ -34,8 +34,8 @@ export function getTimeZone() {
 
 /**
  * Resolve a relative date expression to a CalendarDate.
- * Expressions: "today", "-Nd"/"+Nd", "monthStart", "monthEnd",
- * "prevMonthStart", "prevMonthEnd", "yearStart", "yearEnd", or "YYYY-MM-DD".
+ * Expressions: "today", "-Nd"/"+Nd", "monthStart"/"startOfMonth", "monthEnd"/"endOfMonth",
+ * "prevMonthStart", "prevMonthEnd", "yearStart"/"startOfYear", "yearEnd"/"endOfYear", or "YYYY-MM-DD".
  */
 export function resolveRelativeDate(expr, calendar, min, max) {
   const tz = getTimeZone();
@@ -48,17 +48,17 @@ export function resolveRelativeDate(expr, calendar, min, max) {
   } else if (/^[+-]\d+d$/.test(expr)) {
     const days = parseInt(expr);
     result = now.add({ days });
-  } else if (expr === 'monthStart') {
+  } else if (expr === 'monthStart' || expr === 'startOfMonth') {
     result = now.set({ day: 1 });
-  } else if (expr === 'monthEnd') {
+  } else if (expr === 'monthEnd' || expr === 'endOfMonth') {
     result = now.set({ day: 1 }).add({ months: 1 }).add({ days: -1 });
   } else if (expr === 'prevMonthStart') {
     result = now.set({ day: 1 }).add({ months: -1 });
   } else if (expr === 'prevMonthEnd') {
     result = now.set({ day: 1 }).add({ days: -1 });
-  } else if (expr === 'yearStart') {
+  } else if (expr === 'yearStart' || expr === 'startOfYear') {
     result = now.set({ month: 1, day: 1 });
-  } else if (expr === 'yearEnd') {
+  } else if (expr === 'yearEnd' || expr === 'endOfYear') {
     result = now.set({ month: 1, day: 1 }).add({ years: 1 }).add({ days: -1 });
   } else {
     // Try absolute ISO date
