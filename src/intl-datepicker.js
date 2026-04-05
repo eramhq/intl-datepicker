@@ -1097,11 +1097,7 @@ class IntlDatepicker extends HTMLElement {
     this._updateFormValue();
     this._updateExternalInput();
 
-    const detail = {
-      iso: toISO(date),
-      calendar: { year: date.year, month: date.month, day: date.day },
-      formatted: this.displayValue,
-    };
+    const detail = this.getValue() || { iso: '', calendar: null, formatted: '' };
     this._emit('intl-select', detail);
     this._emit('intl-change', detail);
 
