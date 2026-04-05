@@ -958,6 +958,7 @@ class IntlDatepicker extends HTMLElement {
           const prevWs = startOfWeek(this._state.hoveredDate, this._state.locale);
           if (isSameDay(ws, prevWs)) return;
         }
+        if (type === 'range' && this._state.hoveredDate && isSameDay(date, this._state.hoveredDate)) return;
         this._state = updateState(this._state, { hoveredDate: date });
         this._renderCalendarContent();
       } else if (this._state.hoveredDate) {
@@ -1409,8 +1410,9 @@ class IntlDatepicker extends HTMLElement {
 
   _onOutsideClick(e) {
     if (!this._state.isOpen) return;
-    if (this.contains(e.target) || this.shadowRoot.contains(e.target)) return;
-    if (this._externalInput && this._externalInput.contains(e.target)) return;
+    const path = e.composedPath();
+    if (path.includes(this) || path.includes(this.shadowRoot)) return;
+    if (this._externalInput && path.includes(this._externalInput)) return;
     this._closeCalendar();
   }
 

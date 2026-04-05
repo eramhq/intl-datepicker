@@ -931,6 +931,11 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
         return `Range:     ${start} \u2192 ${end}\nFormatted: ${detail.formatted}`;
       }
 
+      // Incomplete range (first date selected)
+      if (detail.rangeStart && !detail.rangeEnd) {
+        return `Range:     ${detail.iso} \u2192 \u2026\nFormatted: ${detail.formatted}`;
+      }
+
       // Week
       if (detail.weekStart && detail.weekEnd) {
         return `Week:      ${detail.iso}\nFormatted: ${detail.formatted}`;
