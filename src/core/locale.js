@@ -89,16 +89,18 @@ const WEEK_START_FALLBACKS = {
   'he': 7, 'hi': 7, 'pt-BR': 7,
 };
 
-export function getFirstDayOfWeek(locale) {
+function getWeekInfoField(locale, field) {
   try {
     const loc = new Intl.Locale(locale);
-    if (typeof loc.getWeekInfo === 'function') {
-      return loc.getWeekInfo().firstDay;
-    }
-    if (loc.weekInfo) {
-      return loc.weekInfo.firstDay;
-    }
-  } catch { /* fallback below */ }
+    const info = typeof loc.getWeekInfo === 'function' ? loc.getWeekInfo() : loc.weekInfo;
+    if (info) return info[field];
+  } catch { /* fallback */ }
+  return undefined;
+}
+
+export function getFirstDayOfWeek(locale) {
+  const day = getWeekInfoField(locale, 'firstDay');
+  if (day != null) return day;
 
   // Check exact locale, then language only
   if (WEEK_START_FALLBACKS[locale] !== undefined) {
@@ -109,6 +111,10 @@ export function getFirstDayOfWeek(locale) {
     return WEEK_START_FALLBACKS[lang];
   }
   return 1; // Monday (ISO default)
+}
+
+export function getMinimalDays(locale) {
+  return getWeekInfoField(locale, 'minimalDays') ?? 4;
 }
 
 /**

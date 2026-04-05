@@ -1,6 +1,6 @@
 import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
 import { styles, calendarIcon, clearIcon, chevronLeft, chevronRight } from './styles.js';
-import { resolveLocale, isRTL, getWeekdayNames } from './core/locale.js';
+import { resolveLocale, isRTL, getWeekdayNames, getMinimalDays } from './core/locale.js';
 import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelativeDate } from './utils/common.js';
 import {
   createState, updateState, selectDate, moveFocus,
@@ -445,6 +445,7 @@ class IntlDatepicker extends HTMLElement {
       calendar: intlCal,
     });
     this._dayNumberFormatter = new Intl.NumberFormat(locale, { useGrouping: false });
+    this._minimalDays = getMinimalDays(locale);
 
     // Cache parsed presets from attribute
     this._parsedPresets = null;
@@ -820,7 +821,7 @@ class IntlDatepicker extends HTMLElement {
       html += '<div role="row" style="display:contents">';
       if (showWeekNumbers) {
         const weekNum = this._getWeekNumber(week[0].date);
-        html += `<span class="idp-week-number" aria-hidden="true">${weekNum}</span>`;
+        html += `<span class="idp-week-number" aria-hidden="true">${this._formatDayNumber(weekNum)}</span>`;
       }
       for (const cell of week) {
         // Call mapDays if set
@@ -1575,8 +1576,27 @@ class IntlDatepicker extends HTMLElement {
     }
   }
 
+  _getCalendarWeek(date) {
+    try {
+      const locale = this._state.locale;
+      const minDays = this._minimalDays;
+      const dateWeekStart = startOfWeek(date, locale);
+      const pivotDay = dateWeekStart.add({ days: minDays - 1 });
+      const weekYear = pivotDay.year;
+      const yearStart = new CalendarDate(date.calendar, weekYear, 1, 1);
+      let week1Start = startOfWeek(yearStart, locale);
+      const week1Pivot = week1Start.add({ days: minDays - 1 });
+      if (week1Pivot.year < weekYear) {
+        week1Start = week1Start.add({ days: 7 });
+      }
+      return { year: weekYear, week: Math.floor(dateWeekStart.compare(week1Start) / 7) + 1 };
+    } catch {
+      return { year: 0, week: 0 };
+    }
+  }
+
   _getWeekNumber(date) {
-    return this._getISOWeek(date).week;
+    return this._getCalendarWeek(date).week;
   }
 
   _formatYearDisplay(year) {
