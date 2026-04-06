@@ -22,7 +22,26 @@ npm install intl-datepicker
   import 'intl-datepicker';
 </script>
 
+<intl-datepicker></intl-datepicker>
+```
+
+### Non-Gregorian Calendars
+
+Non-Gregorian calendars must be explicitly imported (they are tree-shakeable):
+
+```js
+import 'intl-datepicker';
+import 'intl-datepicker/calendars/persian';
+```
+
+```html
 <intl-datepicker calendar="persian" locale="fa-IR"></intl-datepicker>
+```
+
+Or import all 14 calendars at once:
+
+```js
+import 'intl-datepicker/full'; // includes all calendar systems
 ```
 
 ## Picker Types

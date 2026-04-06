@@ -39,6 +39,14 @@ export function createState(options = {}) {
       selectedDates = value.split(',')
         .map(s => parseISOToCalendar(s.trim(), calendar))
         .filter(d => d !== null);
+    } else if (type === 'week') {
+      const mondayDate = parseTypedValue(value, 'week', calendar);
+      if (mondayDate) {
+        rangeStart = startOfWeek(mondayDate, locale);
+        rangeEnd = endOfWeek(mondayDate, locale);
+      }
+    } else if (type === 'month' || type === 'year') {
+      selectedDate = parseTypedValue(value, type, calendar);
     } else {
       selectedDate = parseISOToCalendar(value, calendar);
     }
@@ -65,8 +73,8 @@ export function createState(options = {}) {
     viewMonth: focusDate.month,
     isOpen: inline,
     inline,
-    min: min ? parseISOToCalendar(min, calendar) : null,
-    max: max ? parseISOToCalendar(max, calendar) : null,
+    min: min ? parseTypedValue(min, type, calendar) : null,
+    max: max ? parseTypedValue(max, type, calendar) : null,
     hoveredDate: null,
     disabledDatesSet,
     disabledDatesFilter: disabledDatesFilter || null,
@@ -325,5 +333,72 @@ export function parseISOToCalendar(iso, calendar) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Convert ISO week (year + week number) to the Gregorian CalendarDate of that week's Monday.
+ * Uses the Jan 4 algorithm: Jan 4 is always in ISO week 1.
+ * Returns null for invalid week numbers.
+ */
+export function isoWeekToCalendarDate(isoYear, weekNum, calendar) {
+  if (weekNum < 1 || weekNum > 53) return null;
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const jan4DayOfWeek = jan4.getUTCDay() || 7; // Mon=1..Sun=7
+  const mondayOfWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 86400000);
+  const targetMonday = new Date(mondayOfWeek1.getTime() + (weekNum - 1) * 7 * 86400000);
+  try {
+    const gregDate = new CalendarDate(
+      targetMonday.getUTCFullYear(),
+      targetMonday.getUTCMonth() + 1,
+      targetMonday.getUTCDate(),
+    );
+    return calendar ? toCalendar(gregDate, calendar) : gregDate;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse a type-aware ISO value string to a CalendarDate in the given calendar.
+ * Handles: YYYY-MM-DD (date), YYYY-Www (week), YYYY-MM (month), YYYY (year).
+ */
+export function parseTypedValue(value, type, calendar) {
+  if (!value) return null;
+
+  if (type === 'week') {
+    const match = value.match(/^(\d{4})-W(\d{2})$/);
+    if (!match) return null;
+    return isoWeekToCalendarDate(parseInt(match[1]), parseInt(match[2]), calendar);
+  }
+
+  if (type === 'month') {
+    const match = value.match(/^(\d{4})-(\d{2})$/);
+    if (!match) return null;
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    if (year < 1 || month < 1 || month > 12) return null;
+    try {
+      const greg = new CalendarDate(year, month, 1);
+      return calendar ? toCalendar(greg, calendar) : greg;
+    } catch {
+      return null;
+    }
+  }
+
+  if (type === 'year') {
+    const match = value.match(/^\d{4}$/);
+    if (!match) return null;
+    const year = parseInt(value);
+    if (year < 1) return null;
+    try {
+      const greg = new CalendarDate(year, 1, 1);
+      return calendar ? toCalendar(greg, calendar) : greg;
+    } catch {
+      return null;
+    }
+  }
+
+  // Default: YYYY-MM-DD
+  return parseISOToCalendar(value, calendar);
 }
 

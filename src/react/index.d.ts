@@ -69,3 +69,41 @@ declare const IntlDatepicker: React.ForwardRefExoticComponent<
 
 export default IntlDatepicker;
 export { IntlDatepicker };
+
+// JSX augmentation for React users using the raw web component
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'intl-datepicker': React.DetailedHTMLProps<
+        React.HTMLAttributes<IntlDatepickerElement> & {
+          calendar?: string;
+          locale?: string;
+          value?: string;
+          type?: DatepickerType;
+          min?: string;
+          max?: string;
+          for?: string;
+          placeholder?: string;
+          name?: string;
+          inline?: boolean;
+          disabled?: boolean;
+          readonly?: boolean;
+          required?: boolean;
+          'show-alternate'?: boolean;
+          'disable-weekends'?: boolean;
+          'sort-dates'?: boolean;
+          'no-animation'?: boolean;
+          'show-week-numbers'?: boolean;
+          'hide-outside-days'?: boolean;
+          'allow-input'?: boolean;
+          'disabled-dates'?: string;
+          'date-separator'?: string;
+          'max-dates'?: string;
+          months?: string;
+          presets?: string;
+        },
+        IntlDatepickerElement
+      >;
+    }
+  }
+}

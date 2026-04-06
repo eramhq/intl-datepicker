@@ -4,6 +4,7 @@ import {
   createState, updateState, selectDate, moveFocus,
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
   isInRange, isRangeEdge, getHoveredWeekBounds, getDayOfWeek, getWeekendDays,
+  isoWeekToCalendarDate, parseTypedValue,
 } from '../state.js';
 import { getCalendar } from '../locale.js';
 
@@ -513,5 +514,132 @@ describe('week hover preview', () => {
       rangeStart: new CalendarDate(2024, 3, 10),
     });
     expect(getHoveredWeekBounds(s)).toBeNull();
+  });
+});
+
+describe('isoWeekToCalendarDate', () => {
+  const cal = getCalendar('gregory');
+
+  it('returns Monday of ISO week 1 of 2024', () => {
+    const date = isoWeekToCalendarDate(2024, 1, cal);
+    expect(date).not.toBeNull();
+    expect(toISO(date)).toBe('2024-01-01');
+  });
+
+  it('returns Monday of ISO week 5 of 2024', () => {
+    const date = isoWeekToCalendarDate(2024, 5, cal);
+    expect(toISO(date)).toBe('2024-01-29');
+  });
+
+  it('handles week spanning year boundary (W01 starting in prev year)', () => {
+    // 2026-W01: Jan 4 2026 is Sunday → Monday of W1 is Dec 29 2025
+    const date = isoWeekToCalendarDate(2026, 1, cal);
+    expect(toISO(date)).toBe('2025-12-29');
+  });
+
+  it('returns null for invalid week numbers', () => {
+    expect(isoWeekToCalendarDate(2024, 0, cal)).toBeNull();
+    expect(isoWeekToCalendarDate(2024, 54, cal)).toBeNull();
+  });
+});
+
+describe('parseTypedValue', () => {
+  const cal = getCalendar('gregory');
+
+  it('parses week format YYYY-Www', () => {
+    const date = parseTypedValue('2024-W05', 'week', cal);
+    expect(date).not.toBeNull();
+    expect(toISO(date)).toBe('2024-01-29');
+  });
+
+  it('parses month format YYYY-MM', () => {
+    const date = parseTypedValue('2024-03', 'month', cal);
+    expect(date).not.toBeNull();
+    expect(date.year).toBe(2024);
+    expect(date.month).toBe(3);
+    expect(date.day).toBe(1);
+  });
+
+  it('parses year format YYYY', () => {
+    const date = parseTypedValue('2024', 'year', cal);
+    expect(date).not.toBeNull();
+    expect(date.year).toBe(2024);
+    expect(date.month).toBe(1);
+    expect(date.day).toBe(1);
+  });
+
+  it('parses date format YYYY-MM-DD', () => {
+    const date = parseTypedValue('2024-03-15', 'date', cal);
+    expect(date).not.toBeNull();
+    expect(date.year).toBe(2024);
+    expect(date.month).toBe(3);
+    expect(date.day).toBe(15);
+  });
+
+  it('returns null for invalid month', () => {
+    expect(parseTypedValue('2024-13', 'month', cal)).toBeNull();
+    expect(parseTypedValue('2024-00', 'month', cal)).toBeNull();
+  });
+
+  it('returns null for invalid week', () => {
+    expect(parseTypedValue('2024-W54', 'week', cal)).toBeNull();
+    expect(parseTypedValue('2024-W00', 'week', cal)).toBeNull();
+  });
+
+  it('returns null for mismatched format', () => {
+    expect(parseTypedValue('2024-03-15', 'week', cal)).toBeNull();
+    expect(parseTypedValue('2024-W05', 'month', cal)).toBeNull();
+    expect(parseTypedValue('2024-03', 'year', cal)).toBeNull();
+  });
+});
+
+describe('createState type-aware parsing (audit fix 2)', () => {
+  it('parses week value on init', () => {
+    const state = createState({ type: 'week', value: '2024-W05', locale: 'en-US' });
+    expect(state.rangeStart).not.toBeNull();
+    expect(state.rangeEnd).not.toBeNull();
+  });
+
+  it('parses month value on init', () => {
+    const state = createState({ type: 'month', value: '2024-03' });
+    expect(state.selectedDate).not.toBeNull();
+    expect(state.selectedDate.month).toBe(3);
+    expect(state.selectedDate.day).toBe(1);
+  });
+
+  it('parses year value on init', () => {
+    const state = createState({ type: 'year', value: '2024' });
+    expect(state.selectedDate).not.toBeNull();
+    expect(state.selectedDate.year).toBe(2024);
+  });
+
+  it('parses month min/max correctly', () => {
+    const state = createState({ type: 'month', min: '2024-03', max: '2024-09' });
+    expect(state.min).not.toBeNull();
+    expect(state.min.month).toBe(3);
+    expect(state.max).not.toBeNull();
+    expect(state.max.month).toBe(9);
+  });
+
+  it('parses year min/max correctly', () => {
+    const state = createState({ type: 'year', min: '2020', max: '2030' });
+    expect(state.min).not.toBeNull();
+    expect(state.min.year).toBe(2020);
+    expect(state.max).not.toBeNull();
+    expect(state.max.year).toBe(2030);
+  });
+
+  it('parses week min/max correctly', () => {
+    const state = createState({ type: 'week', min: '2024-W05', max: '2024-W52', locale: 'en-US' });
+    expect(state.min).not.toBeNull();
+    expect(state.max).not.toBeNull();
+    // min should be Monday of W5 = 2024-01-29
+    expect(toISO(state.min)).toBe('2024-01-29');
+  });
+
+  it('returns null min/max for invalid type-aware values', () => {
+    const state = createState({ type: 'month', min: '2024-13', max: 'invalid' });
+    expect(state.min).toBeNull();
+    expect(state.max).toBeNull();
   });
 });

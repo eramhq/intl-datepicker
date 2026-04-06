@@ -5,6 +5,7 @@ import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelative
 import {
   createState, updateState, selectDate, moveFocus,
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
+  isoWeekToCalendarDate, parseTypedValue,
 } from './core/state.js';
 import { generateMonthGrid } from './core/calendar-grid.js';
 import { renderHeader, renderYearGrid, renderMonthGrid as renderMonthPicker } from './core/calendar-header.js';
@@ -190,7 +191,13 @@ class IntlDatepicker extends HTMLElement {
 
   get valueAsDate() {
     const iso = this.value;
-    if (!iso || iso.includes('/')) return null;
+    if (!iso) return null;
+    const type = this._state?.type;
+    if (type === 'multiple' || iso.includes('/')) return null;
+    if (type === 'week' || type === 'month' || type === 'year') {
+      const calDate = parseTypedValue(iso, type);
+      return calDate ? calendarDateToNative(calDate) : null;
+    }
     return new Date(iso + 'T00:00:00');
   }
 
@@ -507,20 +514,8 @@ class IntlDatepicker extends HTMLElement {
       }
     } else if (this._state.type === 'week' && /^\d{4}-W\d{2}$/.test(isoValue)) {
       const match = isoValue.match(/^(\d{4})-W(\d{2})$/);
-      const isoYear = parseInt(match[1]);
-      const weekNum = parseInt(match[2]);
-      if (weekNum < 1 || weekNum > 53) return;
-      // Jan 4 is always in week 1. Derive Monday of target week.
-      const jan4 = new Date(Date.UTC(isoYear, 0, 4));
-      const jan4DayOfWeek = jan4.getUTCDay() || 7; // Mon=1..Sun=7
-      const mondayOfWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 86400000);
-      const targetMonday = new Date(mondayOfWeek1.getTime() + (weekNum - 1) * 7 * 86400000);
-      const gregDate = new CalendarDate(
-        targetMonday.getUTCFullYear(),
-        targetMonday.getUTCMonth() + 1,
-        targetMonday.getUTCDate(),
-      );
-      const calDate = toCalendar(gregDate, calendar);
+      const calDate = isoWeekToCalendarDate(parseInt(match[1]), parseInt(match[2]), calendar);
+      if (!calDate) return;
       this._state = selectDate(this._state, calDate);
     } else if (this._state.type === 'range' && isoValue.includes('/')) {
       const [startIso, endIso] = isoValue.split('/');
@@ -565,23 +560,36 @@ class IntlDatepicker extends HTMLElement {
       return;
     }
 
-    if (val && this.getAttribute('min')) {
-      const min = this.getAttribute('min');
-      if (val < min) {
-        this._internals.setValidity({ rangeUnderflow: true }, `Date must be ${min} or later`, anchor);
+    if (val && (this._state.min || this._state.max)) {
+      const dates = this._getValueDates();
+      if (this._state.min && dates.some(d => d.compare(this._state.min) < 0)) {
+        this._internals.setValidity({ rangeUnderflow: true },
+          `Date must be ${this.getAttribute('min')} or later`, anchor);
         return;
       }
-    }
-
-    if (val && this.getAttribute('max')) {
-      const max = this.getAttribute('max');
-      if (val > max) {
-        this._internals.setValidity({ rangeOverflow: true }, `Date must be ${max} or earlier`, anchor);
+      if (this._state.max && dates.some(d => d.compare(this._state.max) > 0)) {
+        this._internals.setValidity({ rangeOverflow: true },
+          `Date must be ${this.getAttribute('max')} or earlier`, anchor);
         return;
       }
     }
 
     this._internals.setValidity({});
+  }
+
+  _getValueDates() {
+    const type = this._state.type;
+    if (type === 'multiple') {
+      return this._state.selectedDates || [];
+    }
+    if (type === 'range' || type === 'week') {
+      const dates = [];
+      if (this._state.rangeStart) dates.push(this._state.rangeStart);
+      if (this._state.rangeEnd) dates.push(this._state.rangeEnd);
+      return dates;
+    }
+    if (this._state.selectedDate) return [this._state.selectedDate];
+    return [];
   }
 
   _render() {
