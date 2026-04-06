@@ -1,0 +1,9 @@
+import './persian.js';
+import './islamic.js';
+import './hebrew.js';
+import './buddhist.js';
+import './japanese.js';
+import './indian.js';
+import './ethiopic.js';
+import './coptic.js';
+import './roc.js';

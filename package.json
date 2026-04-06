@@ -11,6 +11,36 @@
       "types": "./dist/intl-datepicker.d.ts",
       "import": "./dist/intl-datepicker.js"
     },
+    "./full": {
+      "import": "./dist/full.js"
+    },
+    "./calendars/persian": {
+      "import": "./dist/calendars/persian.js"
+    },
+    "./calendars/islamic": {
+      "import": "./dist/calendars/islamic.js"
+    },
+    "./calendars/hebrew": {
+      "import": "./dist/calendars/hebrew.js"
+    },
+    "./calendars/buddhist": {
+      "import": "./dist/calendars/buddhist.js"
+    },
+    "./calendars/japanese": {
+      "import": "./dist/calendars/japanese.js"
+    },
+    "./calendars/indian": {
+      "import": "./dist/calendars/indian.js"
+    },
+    "./calendars/ethiopic": {
+      "import": "./dist/calendars/ethiopic.js"
+    },
+    "./calendars/coptic": {
+      "import": "./dist/calendars/coptic.js"
+    },
+    "./calendars/roc": {
+      "import": "./dist/calendars/roc.js"
+    },
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"

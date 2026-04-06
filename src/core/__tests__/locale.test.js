@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  getCalendar, SUPPORTED_CALENDARS, isRTL,
+  getCalendar, getSupportedCalendars, isRTL,
   getFirstDayOfWeek, resolveLocale, getWeekdayNames,
 } from '../locale.js';
 
@@ -47,8 +47,9 @@ describe('getCalendar', () => {
       'islamic-civil', 'islamic-tbla', 'hebrew', 'buddhist',
       'japanese', 'indian', 'ethiopic', 'ethioaa', 'coptic', 'roc',
     ];
+    const supported = getSupportedCalendars();
     for (const id of expected) {
-      expect(SUPPORTED_CALENDARS).toContain(id);
+      expect(supported).toContain(id);
       const cal = getCalendar(id);
       expect(cal).toBeDefined();
     }

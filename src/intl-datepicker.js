@@ -1,6 +1,6 @@
 import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
 import { styles, calendarIcon, clearIcon, chevronLeft, chevronRight } from './styles.js';
-import { resolveLocale, isRTL, getWeekdayNames, getMinimalDays } from './core/locale.js';
+import { resolveLocale, isRTL, getWeekdayNames, getMinimalDays, isCalendarRegistered } from './core/locale.js';
 import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelativeDate } from './utils/common.js';
 import {
   createState, updateState, selectDate, moveFocus,
@@ -399,7 +399,11 @@ class IntlDatepicker extends HTMLElement {
   // --- Private ---
 
   _initState() {
-    const calendarId = this.getAttribute('calendar') || 'gregory';
+    let calendarId = this.getAttribute('calendar') || 'gregory';
+    if (!isCalendarRegistered(calendarId)) {
+      console.warn(`Calendar "${calendarId}" not registered. Import 'intl-datepicker/calendars/${calendarId}' to enable it.`);
+      calendarId = 'gregory';
+    }
     const locale = resolveLocale(this.getAttribute('locale'));
 
     // Parse disabled-dates JSON attribute

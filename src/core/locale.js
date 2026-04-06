@@ -1,49 +1,30 @@
-import {
-  GregorianCalendar,
-  PersianCalendar,
-  IslamicUmalquraCalendar,
-  IslamicCivilCalendar,
-  IslamicTabularCalendar,
-  HebrewCalendar,
-  BuddhistCalendar,
-  JapaneseCalendar,
-  IndianCalendar,
-  EthiopicCalendar,
-  EthiopicAmeteAlemCalendar,
-  CopticCalendar,
-  TaiwanCalendar,
-} from '@internationalized/date';
+import { GregorianCalendar } from '@internationalized/date';
 
-const CALENDAR_MAP = {
-  gregory: () => new GregorianCalendar(),
-  persian: () => new PersianCalendar(),
-  islamic: () => new IslamicUmalquraCalendar(),
-  'islamic-umalqura': () => new IslamicUmalquraCalendar(),
-  'islamic-civil': () => new IslamicCivilCalendar(),
-  'islamic-tbla': () => new IslamicTabularCalendar(),
-  hebrew: () => new HebrewCalendar(),
-  buddhist: () => new BuddhistCalendar(),
-  japanese: () => new JapaneseCalendar(),
-  indian: () => new IndianCalendar(),
-  ethiopic: () => new EthiopicCalendar(),
-  ethioaa: () => new EthiopicAmeteAlemCalendar(),
-  coptic: () => new CopticCalendar(),
-  roc: () => new TaiwanCalendar(),
-};
+const calendarRegistry = new Map([
+  ['gregory', () => new GregorianCalendar()],
+]);
+
+export function registerCalendar(name, factory) {
+  calendarRegistry.set(name, factory);
+}
+
+export function isCalendarRegistered(id) {
+  return calendarRegistry.has(id);
+}
+
+export function getSupportedCalendars() {
+  return [...calendarRegistry.keys()];
+}
 
 const calendarCache = new Map();
 
-/**
- * Create (or return cached) calendar instance from a string identifier.
- * Calendar instances are stateless/immutable, so caching is safe.
- */
 export function getCalendar(identifier) {
   const cached = calendarCache.get(identifier);
   if (cached) return cached;
 
-  const factory = CALENDAR_MAP[identifier];
+  const factory = calendarRegistry.get(identifier);
   if (!factory) {
-    console.warn(`Unknown calendar "${identifier}", falling back to gregory`);
+    console.warn(`Calendar "${identifier}" not registered. Import 'intl-datepicker/calendars/${identifier}' to enable it.`);
     const fallback = new GregorianCalendar();
     calendarCache.set(identifier, fallback);
     return fallback;
@@ -52,8 +33,6 @@ export function getCalendar(identifier) {
   calendarCache.set(identifier, instance);
   return instance;
 }
-
-export const SUPPORTED_CALENDARS = Object.keys(CALENDAR_MAP);
 
 // RTL detection with fallback table
 const RTL_LOCALES = new Set([
