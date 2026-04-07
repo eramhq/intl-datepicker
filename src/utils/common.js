@@ -81,3 +81,27 @@ export function resolveRelativeDate(expr, calendar, min, max) {
 
   return result;
 }
+
+/**
+ * Escape a string for safe interpolation into an HTML attribute value.
+ * Quotes, ampersands, and angle brackets only — sufficient for double-quoted
+ * attribute contexts which is the only place callers use this.
+ */
+export function escAttr(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Parse a JSON-encoded attribute value, returning the parsed result only if
+ * it satisfies `validate`. Returns null on parse failure or validation
+ * failure — never throws.
+ */
+export function parseJSONAttr(raw, validate) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return validate(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}

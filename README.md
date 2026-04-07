@@ -1,11 +1,17 @@
 # intl-datepicker
 
+> **Status: pre-release (alpha).** APIs are stabilizing for v0.2 but may still
+> change. Browser cross-version verification is in progress — if you spot a
+> rough edge, please file an issue.
+
 A framework-agnostic, multi-calendar datepicker Web Component powered by `Intl.DateTimeFormat`.
 
 - **14 calendar systems** — Gregorian, Persian, Islamic (3 variants), Hebrew, Buddhist, Japanese, Indian, Ethiopic, Coptic, ROC, and more
-- **Full i18n** — locale-aware month/day names, number formatting, and RTL support
+- **Locale-aware formatting** — month/day names, number formatting, and RTL support driven by `Intl`
+- **Built-in label translations** for English, Persian, Arabic, and Hebrew. Other locales fall back to English defaults; supply your own via the `labels` API
 - **Multiple picker types** — date, range, week, multiple, month, year
 - **Zero-framework lock-in** — works with vanilla HTML, React, Vue, Svelte, or any framework
+- **SSR-safe** — importable in Node/Next.js without crashing; rendering is still client-only
 - **Form-associated** — participates in `<form>` submission, validation, and reset
 - **Accessible** — full keyboard navigation, ARIA roles, and `prefers-reduced-motion` support
 

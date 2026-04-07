@@ -1,5 +1,4 @@
-export const styles = new CSSStyleSheet();
-styles.replaceSync(/* css */`
+const CSS = /* css */`
   :host {
     --idp-font-family: system-ui, -apple-system, sans-serif;
     --idp-primary: #2563eb;
@@ -359,21 +358,19 @@ styles.replaceSync(/* css */`
   .idp-day.range-start {
     background: var(--idp-selected-bg);
     color: var(--idp-selected-text);
-    border-radius: 50% 0 0 50%;
+    border-start-start-radius: 50%;
+    border-end-start-radius: 50%;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
   }
 
   .idp-day.range-end {
     background: var(--idp-selected-bg);
     color: var(--idp-selected-text);
-    border-radius: 0 50% 50% 0;
-  }
-
-  :host([dir="rtl"]) .idp-day.range-start {
-    border-radius: 0 50% 50% 0;
-  }
-
-  :host([dir="rtl"]) .idp-day.range-end {
-    border-radius: 50% 0 0 50%;
+    border-start-end-radius: 50%;
+    border-end-end-radius: 50%;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
   }
 
   .idp-day.range-start.range-end {
@@ -452,14 +449,9 @@ styles.replaceSync(/* css */`
     flex-direction: column;
     gap: 2px;
     padding: 8px;
-    border-right: 1px solid var(--idp-border);
+    border-inline-end: 1px solid var(--idp-border);
     min-width: 120px;
     max-width: 160px;
-  }
-
-  :host([dir="rtl"]) .idp-presets {
-    border-right: none;
-    border-left: 1px solid var(--idp-border);
   }
 
   .idp-calendar-main {
@@ -498,15 +490,10 @@ styles.replaceSync(/* css */`
     .idp-presets {
       flex-direction: row;
       overflow-x: auto;
-      border-right: none;
-      border-bottom: 1px solid var(--idp-border);
+      border-inline-end: none;
+      border-block-end: 1px solid var(--idp-border);
       max-width: none;
       min-width: 0;
-    }
-
-    :host([dir="rtl"]) .idp-presets {
-      border-left: none;
-      border-bottom: 1px solid var(--idp-border);
     }
   }
 
@@ -538,9 +525,8 @@ styles.replaceSync(/* css */`
     min-width: 280px;
   }
 
-  :host([dir="rtl"]) .idp-months-container {
-    flex-direction: row-reverse;
-  }
+  /* Multi-month order naturally flows in inline direction; no RTL flip needed
+     since flex inside an RTL container reverses visually. */
 
   /* --- Responsive --- */
   @media (max-width: 600px) {
@@ -618,7 +604,37 @@ styles.replaceSync(/* css */`
       min-height: 44px;
     }
   }
-`);
+`;
+
+let _stylesheet = null;
+let _stylesheetTried = false;
+
+/**
+ * Get the constructable stylesheet, creating it lazily on first call.
+ * Returns null in environments without CSSStyleSheet (Node/SSR) or
+ * older Safari that lacks the constructable variant.
+ */
+export function getStyles() {
+  if (_stylesheetTried) return _stylesheet;
+  _stylesheetTried = true;
+  if (typeof CSSStyleSheet === 'undefined') return null;
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(CSS);
+    _stylesheet = sheet;
+  } catch {
+    _stylesheet = null;
+  }
+  return _stylesheet;
+}
+
+/**
+ * Get the raw CSS text, used as a fallback for browsers without
+ * adoptedStyleSheets support (Safari < 16.4).
+ */
+export function getStylesText() {
+  return CSS;
+}
 
 export const calendarIcon = `<svg class="idp-calendar-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
   <rect x="2" y="3" width="16" height="15" rx="2"/>

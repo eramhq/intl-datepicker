@@ -12,33 +12,43 @@
       "import": "./dist/intl-datepicker.js"
     },
     "./full": {
+      "types": "./dist/full.d.ts",
       "import": "./dist/full.js"
     },
     "./calendars/persian": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/persian.js"
     },
     "./calendars/islamic": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/islamic.js"
     },
     "./calendars/hebrew": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/hebrew.js"
     },
     "./calendars/buddhist": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/buddhist.js"
     },
     "./calendars/japanese": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/japanese.js"
     },
     "./calendars/indian": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/indian.js"
     },
     "./calendars/ethiopic": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/ethiopic.js"
     },
     "./calendars/coptic": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/coptic.js"
     },
     "./calendars/roc": {
+      "types": "./dist/calendars/calendar.d.ts",
       "import": "./dist/calendars/roc.js"
     },
     "./react": {
@@ -46,6 +56,11 @@
       "import": "./dist/react/index.js"
     }
   },
+  "sideEffects": [
+    "./dist/intl-datepicker.js",
+    "./dist/full.js",
+    "./dist/calendars/*.js"
+  ],
   "files": [
     "dist"
   ],

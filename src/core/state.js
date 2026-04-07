@@ -1,5 +1,6 @@
 import { CalendarDate, toCalendar, today, isSameDay, startOfWeek, endOfWeek } from '@internationalized/date';
 import { getCalendar } from './locale.js';
+import { resolveLabels } from './labels.js';
 import { getTimeZone, calendarDateToNative } from '../utils/common.js';
 
 /**
@@ -20,6 +21,7 @@ export function createState(options = {}) {
     isRTL = false,
     maxDates = null,
     sortDates = false,
+    labels = null,
   } = options;
 
   const calendar = getCalendar(calendarId);
@@ -83,6 +85,7 @@ export function createState(options = {}) {
     _isRTL: isRTL,
     maxDates: maxDates || null,
     sortDates,
+    labels: labels || resolveLabels(locale, null),
   };
 }
 

@@ -1,15 +1,23 @@
 import { CalendarDate } from '@internationalized/date';
+import type * as React from 'react';
 import type {
   DatepickerType,
+  DateFormat,
   SelectDetail,
   NavigateDetail,
   MapDaysFn,
   RangePreset,
   DisabledDatesFilterFn,
   IntlDatepickerElement,
+  IntlDatepickerLabels,
 } from '../intl-datepicker.js';
 
-export interface IntlDatepickerProps {
+/**
+ * Props for the React wrapper. Extends `HTMLAttributes` so `className`,
+ * `style`, `id`, `aria-*`, `data-*`, and `children` all flow through to the
+ * underlying custom element automatically.
+ */
+export interface IntlDatepickerProps extends React.HTMLAttributes<IntlDatepickerElement> {
   // String attributes
   calendar?: string;
   locale?: string;
@@ -24,7 +32,12 @@ export interface IntlDatepickerProps {
   dateSeparator?: string;
   maxDates?: string | number;
   months?: string | number;
-  presets?: string;
+  /** Override segment-order detection for typed input ('auto' | 'YMD' | 'DMY' | 'MDY'). */
+  dateFormat?: DateFormat;
+
+  // Dual-form attributes (string for JSON form, object/array for direct form)
+  presets?: string | RangePreset[];
+  labels?: string | IntlDatepickerLabels;
 
   // Boolean attributes
   inline?: boolean;
@@ -38,6 +51,12 @@ export interface IntlDatepickerProps {
   showWeekNumbers?: boolean;
   hideOutsideDays?: boolean;
   allowInput?: boolean;
+
+  // JS-only properties (passed via property setter, not attribute)
+  mapDays?: MapDaysFn | null;
+  disabledDatesFilter?: DisabledDatesFilterFn | null;
+  /** Alias for `disabledDatesFilter`. Will be removed in v0.2 — prefer `disabledDatesFilter`. */
+  isDateDisabled?: DisabledDatesFilterFn | null;
 
   // Event handlers
   onSelect?: (detail: SelectDetail) => void;
@@ -98,9 +117,11 @@ declare global {
           'allow-input'?: boolean;
           'disabled-dates'?: string;
           'date-separator'?: string;
+          'date-format'?: DateFormat;
           'max-dates'?: string;
           months?: string;
           presets?: string;
+          labels?: string;
         },
         IntlDatepickerElement
       >;

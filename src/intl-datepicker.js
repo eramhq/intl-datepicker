@@ -1,7 +1,7 @@
 import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
-import { styles, calendarIcon, clearIcon, chevronLeft, chevronRight } from './styles.js';
+import { getStyles, getStylesText, calendarIcon, clearIcon, chevronLeft, chevronRight } from './styles.js';
 import { resolveLocale, isRTL, getWeekdayNames, getMinimalDays, isCalendarRegistered } from './core/locale.js';
-import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelativeDate } from './utils/common.js';
+import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelativeDate, escAttr, parseJSONAttr } from './utils/common.js';
 import {
   createState, updateState, selectDate, moveFocus,
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
@@ -12,6 +12,9 @@ import { renderHeader, renderYearGrid, renderMonthGrid as renderMonthPicker } fr
 import { formatDateShort, formatRange, formatMonthYear, getGregorianEquivalent } from './utils/format.js';
 import { positionCalendar } from './core/positioning.js';
 import { parseInput } from './core/date-input.js';
+import { resolveLabels } from './core/labels.js';
+
+const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
 // Track the currently open instance to close others
 let openInstance = null;
@@ -27,21 +30,12 @@ function toPlainDate(d) {
   return { year: d.year, month: d.month, day: d.day };
 }
 
-const FOOTER_LABELS = {
-  en: { today: 'Today', clear: 'Clear' },
-  fa: { today: 'امروز', clear: 'پاک کردن' },
-  ar: { today: 'اليوم', clear: 'مسح' },
-  he: { today: 'היום', clear: 'נקה' },
-  de: { today: 'Heute', clear: 'Löschen' },
-  fr: { today: "Aujourd'hui", clear: 'Effacer' },
-  ja: { today: '今日', clear: 'クリア' },
-  zh: { today: '今天', clear: '清除' },
-  ko: { today: '오늘', clear: '지우기' },
-  hi: { today: 'आज', clear: 'साफ़ करें' },
-  th: { today: 'วันนี้', clear: 'ล้าง' },
-};
+// SSR-safe base: in Node/SSR environments HTMLElement is undefined.
+// We never instantiate the class server-side (the register() guard skips
+// customElements.define), so a noop base is sufficient to allow `import`.
+const HTMLElementBase = typeof HTMLElement !== 'undefined' ? HTMLElement : class {};
 
-class IntlDatepicker extends HTMLElement {
+class IntlDatepicker extends HTMLElementBase {
   static formAssociated = true;
 
   static get observedAttributes() {
@@ -53,13 +47,23 @@ class IntlDatepicker extends HTMLElement {
       'date-separator', 'max-dates', 'sort-dates',
       'months', 'presets', 'no-animation',
       'show-week-numbers', 'hide-outside-days', 'allow-input',
+      'labels', 'date-format',
     ];
   }
 
   constructor() {
     super();
     this.attachShadow({ mode: 'open', delegatesFocus: true });
-    this.shadowRoot.adoptedStyleSheets = [styles];
+
+    const sheet = getStyles();
+    if (sheet && 'adoptedStyleSheets' in this.shadowRoot) {
+      this.shadowRoot.adoptedStyleSheets = [sheet];
+    } else {
+      // Older Safari (<16.4) lacks adoptedStyleSheets — fallback to <style>
+      const styleEl = document.createElement('style');
+      styleEl.textContent = getStylesText();
+      this.shadowRoot.appendChild(styleEl);
+    }
 
     try {
       this._internals = this.attachInternals();
@@ -76,6 +80,8 @@ class IntlDatepicker extends HTMLElement {
     this._boundKeydown = this._onDocumentKeydown.bind(this);
     this._boundExternalClick = null;
     this._boundExternalFocus = null;
+    this._userLabelsFromAttr = null;
+    this._userLabelsFromProp = null;
   }
 
   connectedCallback() {
@@ -152,7 +158,30 @@ class IntlDatepicker extends HTMLElement {
       case 'no-animation':
         this._render();
         break;
+      case 'labels':
+        this._userLabelsFromAttr = parseJSONAttr(newVal, isPlainObject);
+        this._applyLabels();
+        break;
+      case 'date-format':
+        break;
     }
+  }
+
+  // Property setters take precedence over the attribute on a per-key basis,
+  // so attribute-default + property-override merge cleanly.
+  _mergedUserLabels() {
+    const fromAttr = this._userLabelsFromAttr;
+    const fromProp = this._userLabelsFromProp;
+    if (!fromAttr && !fromProp) return null;
+    return { ...(fromAttr || {}), ...(fromProp || {}) };
+  }
+
+  _applyLabels() {
+    if (!this._state) return;
+    this._state = updateState(this._state, {
+      labels: resolveLabels(this._state.locale, this._mergedUserLabels()),
+    });
+    this._render();
   }
 
   // --- Public API ---
@@ -383,6 +412,15 @@ class IntlDatepicker extends HTMLElement {
   get isDateDisabled() { return this.disabledDatesFilter; }
   set isDateDisabled(fn) { this.disabledDatesFilter = fn; }
 
+  get labels() {
+    return this._state ? this._state.labels : resolveLabels('en', null);
+  }
+
+  set labels(val) {
+    this._userLabelsFromProp = isPlainObject(val) ? val : null;
+    this._applyLabels();
+  }
+
   // --- Form callbacks ---
 
   get form() { return this._internals?.form; }
@@ -413,18 +451,7 @@ class IntlDatepicker extends HTMLElement {
     }
     const locale = resolveLocale(this.getAttribute('locale'));
 
-    // Parse disabled-dates JSON attribute
-    let disabledDates = null;
-    const disabledDatesAttr = this.getAttribute('disabled-dates');
-    if (disabledDatesAttr) {
-      try {
-        disabledDates = JSON.parse(disabledDatesAttr);
-        if (!Array.isArray(disabledDates)) disabledDates = null;
-      } catch {
-        disabledDates = null;
-      }
-    }
-
+    const disabledDates = parseJSONAttr(this.getAttribute('disabled-dates'), Array.isArray);
     const maxDates = parsePositiveInt(this.getAttribute('max-dates'));
 
     const type = this.getAttribute('type') || 'date';
@@ -432,6 +459,9 @@ class IntlDatepicker extends HTMLElement {
     if (!isValidType) {
       console.warn(`[intl-datepicker] Unknown type="${type}". Valid types: ${VALID_TYPES.join(', ')}. Falling back to "date".`);
     }
+
+    this._userLabelsFromAttr = parseJSONAttr(this.getAttribute('labels'), isPlainObject);
+    const userLabels = this._mergedUserLabels();
 
     this._state = createState({
       calendarId,
@@ -447,6 +477,7 @@ class IntlDatepicker extends HTMLElement {
       isRTL: isRTL(locale),
       maxDates,
       sortDates: this.hasAttribute('sort-dates'),
+      labels: resolveLabels(locale, userLabels),
     });
 
     // Cache formatters that depend on locale/calendar (avoid re-creation per cell)
@@ -458,15 +489,7 @@ class IntlDatepicker extends HTMLElement {
     this._dayNumberFormatter = new Intl.NumberFormat(locale, { useGrouping: false });
     this._minimalDays = getMinimalDays(locale);
 
-    // Cache parsed presets from attribute
-    this._parsedPresets = null;
-    const presetsAttr = this.getAttribute('presets');
-    if (presetsAttr) {
-      try {
-        const p = JSON.parse(presetsAttr);
-        if (Array.isArray(p)) this._parsedPresets = p;
-      } catch { /* invalid JSON */ }
-    }
+    this._parsedPresets = parseJSONAttr(this.getAttribute('presets'), Array.isArray);
   }
 
   _setValue(isoValue, emitEvent) {
@@ -556,7 +579,7 @@ class IntlDatepicker extends HTMLElement {
     const anchor = this.shadowRoot.querySelector('.idp-input');
 
     if (this.hasAttribute('required') && !val) {
-      this._internals.setValidity({ valueMissing: true }, 'Please select a date', anchor);
+      this._internals.setValidity({ valueMissing: true }, this._state.labels.pleaseSelectDate, anchor);
       return;
     }
 
@@ -613,8 +636,8 @@ class IntlDatepicker extends HTMLElement {
             <input class="idp-input" part="input"
               type="text"
               ${!allowInput ? 'readonly' : ''}
-              value="${this._escAttr(displayVal)}"
-              placeholder="${this._escAttr(placeholder)}"
+              value="${escAttr(displayVal)}"
+              placeholder="${escAttr(placeholder)}"
               ${isDisabled ? 'disabled' : ''}
               ${isReadonly ? 'readonly' : ''}
               aria-haspopup="dialog"
@@ -623,7 +646,7 @@ class IntlDatepicker extends HTMLElement {
               autocomplete="off"
             />
           </slot>
-          ${displayVal ? `<button class="idp-clear-btn" data-action="clear" aria-label="Clear date" type="button">${clearIcon}</button>` : ''}
+          ${displayVal ? `<button class="idp-clear-btn" data-action="clear" aria-label="${escAttr(this._state.labels.clearDate)}" type="button">${clearIcon}</button>` : ''}
           ${calendarIcon}
         </div>
       `;
@@ -636,7 +659,7 @@ class IntlDatepicker extends HTMLElement {
       <div class="idp-calendar${hasPresets ? ' idp-has-presets' : ''}" part="calendar"
         role="dialog"
         aria-modal="${!isInline}"
-        aria-label="Date picker"
+        aria-label="${escAttr(this._state.labels.datePicker)}"
         ${!isInline && !this._state.isOpen ? 'hidden' : ''}
       >
         ${presetsHTML}
@@ -688,8 +711,8 @@ class IntlDatepicker extends HTMLElement {
   }
 
   _renderFooter(showAlternate) {
-    const todayLabel = this._getLocalizedLabel('today');
-    const clearLabel = this._getLocalizedLabel('clear');
+    const todayLabel = this._state.labels.today;
+    const clearLabel = this._state.labels.clear;
     let html = `
       <div class="idp-footer" part="footer">
         <button class="idp-footer-btn" part="today-btn" data-action="today" type="button">${todayLabel}</button>
@@ -715,7 +738,7 @@ class IntlDatepicker extends HTMLElement {
     const currentStart = this._state.rangeStart ? toISO(this._state.rangeStart) : '';
     const currentEnd = this._state.rangeEnd ? toISO(this._state.rangeEnd) : '';
 
-    let html = '<div class="idp-presets" part="presets" role="group" aria-label="Date range presets">';
+    let html = `<div class="idp-presets" part="presets" role="group" aria-label="${escAttr(this._state.labels.rangePresets)}">`;
     for (const preset of presets) {
       if (!preset.label || !preset.value) continue;
       // Check if this preset matches current selection
@@ -731,8 +754,8 @@ class IntlDatepicker extends HTMLElement {
 
       html += `<button class="idp-preset-btn${isActive ? ' active' : ''}"
         data-action="apply-preset"
-        data-preset-value="${this._escAttr(preset.value)}"
-        type="button">${this._escAttr(preset.label)}</button>`;
+        data-preset-value="${escAttr(preset.value)}"
+        type="button">${escAttr(preset.label)}</button>`;
     }
     html += '</div>';
     return html;
@@ -785,11 +808,12 @@ class IntlDatepicker extends HTMLElement {
 
   _renderMultiMonthHeader(title, isFirst, isLast, isRTL) {
     const { chevronLeft: chL, chevronRight: chR } = this._getChevrons();
+    const labels = this._state.labels;
     const prevBtn = isFirst
-      ? `<button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="Previous month" type="button">${isRTL ? chR : chL}</button>`
+      ? `<button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="${escAttr(labels.previousMonth)}" type="button">${isRTL ? chR : chL}</button>`
       : '<span class="idp-nav-btn" style="visibility:hidden"></span>';
     const nextBtn = isLast
-      ? `<button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="Next month" type="button">${isRTL ? chL : chR}</button>`
+      ? `<button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="${escAttr(labels.nextMonth)}" type="button">${isRTL ? chL : chR}</button>`
       : '<span class="idp-nav-btn" style="visibility:hidden"></span>';
 
     return `
@@ -817,7 +841,7 @@ class IntlDatepicker extends HTMLElement {
 
     let html = `<div class="idp-weekdays${showWeekNumbers ? ' idp-has-week-numbers' : ''}" role="row" style="grid-template-columns:repeat(${cols},1fr)">`;
     if (showWeekNumbers) {
-      html += '<div class="idp-weekday idp-week-number-header" role="columnheader" aria-label="Week number">#</div>';
+      html += `<div class="idp-weekday idp-week-number-header" role="columnheader" aria-label="${escAttr(this._state.labels.weekNumber)}">#</div>`;
     }
     for (const wd of weekdays) {
       html += `<div class="idp-weekday" part="weekday" role="columnheader">${wd}</div>`;
@@ -881,7 +905,7 @@ class IntlDatepicker extends HTMLElement {
         // Format the accessible label
         const label = this._formatDayLabel(cell.date);
         const styleAttr = mapped.style ? ` style="${mapped.style}"` : '';
-        const titleAttr = mapped.title ? ` title="${this._escAttr(mapped.title)}"` : '';
+        const titleAttr = mapped.title ? ` title="${escAttr(mapped.title)}"` : '';
         const content = mapped.content || '';
 
         html += `<button class="${classes.join(' ')}" part="day"
@@ -949,7 +973,7 @@ class IntlDatepicker extends HTMLElement {
       if (e.relatedTarget && shadow.contains(e.relatedTarget)) return;
       const text = input.value.trim();
       if (!text) return;
-      const parsed = parseInput(text, this._state.calendarId, this._state.locale);
+      const parsed = parseInput(text, this._state.calendarId, this._state.locale, this.getAttribute('date-format'));
       if (parsed && !isDateDisabled(this._state, parsed)) {
         input.removeAttribute('aria-invalid');
         this._selectDate(parsed);
@@ -1368,6 +1392,13 @@ class IntlDatepicker extends HTMLElement {
     }
     openInstance = this;
 
+    // Capture the element that had focus when the picker opened, so we can
+    // return focus to it on close. Prefer the slotted/external input when set,
+    // since that's the user-visible trigger.
+    this._lastTrigger = this._externalInput
+      || this._slottedInput
+      || (typeof document !== 'undefined' ? document.activeElement : null);
+
     this._state = updateState(this._state, { isOpen: true });
     // Set initial view based on type
     if (this._state.type === 'month') {
@@ -1443,11 +1474,20 @@ class IntlDatepicker extends HTMLElement {
 
     if (openInstance === this) openInstance = null;
 
-    // Return focus to input
-    this._closingCalendar = true;
-    const trigger = this.shadowRoot.querySelector('.idp-input') || this._externalInput;
-    if (trigger) trigger.focus();
-    this._closingCalendar = false;
+    // Only restore focus if it's still inside our shadow root — otherwise the
+    // user has already moved focus elsewhere and we shouldn't steal it.
+    const focusInsidePicker = this.shadowRoot.activeElement
+      || (typeof document !== 'undefined' && document.activeElement === this);
+
+    if (focusInsidePicker) {
+      this._closingCalendar = true;
+      const trigger = this._lastTrigger
+        || this.shadowRoot.querySelector('.idp-input')
+        || this._externalInput;
+      if (trigger && typeof trigger.focus === 'function') trigger.focus();
+      this._closingCalendar = false;
+    }
+    this._lastTrigger = null;
   }
 
   _onOutsideClick(e) {
@@ -1509,7 +1549,7 @@ class IntlDatepicker extends HTMLElement {
 
     // If the external input has a value, try to parse it
     if (input.value && !this.getAttribute('value')) {
-      const parsed = parseInput(input.value, this._state.calendarId, this._state.locale);
+      const parsed = parseInput(input.value, this._state.calendarId, this._state.locale, this.getAttribute('date-format'));
       if (parsed) {
         this._state = selectDate(this._state, parsed);
         this._updateFormValue();
@@ -1633,12 +1673,6 @@ class IntlDatepicker extends HTMLElement {
     }
   }
 
-  _getLocalizedLabel(key) {
-    const lang = (this._state?.locale || 'en').split('-')[0];
-    const set = FOOTER_LABELS[lang] || FOOTER_LABELS.en;
-    return set[key] || FOOTER_LABELS.en[key];
-  }
-
   _destroyPositioning() {
     if (this._positionCleanup) {
       this._positionCleanup();
@@ -1653,12 +1687,19 @@ class IntlDatepicker extends HTMLElement {
       composed: true,
     }));
   }
-
-  _escAttr(str) {
-    return (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  }
 }
 
-customElements.define('intl-datepicker', IntlDatepicker);
+/**
+ * Register the custom element. Safe to call from any environment:
+ * skips silently in SSR (no `customElements`) and on HMR / multi-bundle
+ * (already registered).
+ */
+export function register() {
+  if (typeof customElements === 'undefined') return;
+  if (customElements.get('intl-datepicker')) return;
+  customElements.define('intl-datepicker', IntlDatepicker);
+}
+
+register();
 
 export { IntlDatepicker };

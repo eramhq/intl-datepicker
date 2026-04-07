@@ -7,9 +7,18 @@ function copyDts() {
     name: 'copy-dts',
     closeBundle() {
       mkdirSync(resolve(__dirname, 'dist/react'), { recursive: true });
+      mkdirSync(resolve(__dirname, 'dist/calendars'), { recursive: true });
       copyFileSync(
         resolve(__dirname, 'src/intl-datepicker.d.ts'),
         resolve(__dirname, 'dist/intl-datepicker.d.ts'),
+      );
+      copyFileSync(
+        resolve(__dirname, 'src/full.d.ts'),
+        resolve(__dirname, 'dist/full.d.ts'),
+      );
+      copyFileSync(
+        resolve(__dirname, 'src/calendars/calendar.d.ts'),
+        resolve(__dirname, 'dist/calendars/calendar.d.ts'),
       );
       copyFileSync(
         resolve(__dirname, 'src/react/index.d.ts'),

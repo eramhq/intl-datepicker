@@ -1,5 +1,6 @@
 import { chevronLeft, chevronRight, chevronDown } from '../styles.js';
 import { formatMonthYear } from '../utils/format.js';
+import { escAttr } from '../utils/common.js';
 import { getMonthOptions, getMonthCount } from './calendar-grid.js';
 
 /**
@@ -7,7 +8,7 @@ import { getMonthOptions, getMonthCount } from './calendar-grid.js';
  * Returns HTML string.
  */
 export function renderHeader(state, view) {
-  const { viewYear, viewMonth, locale, calendarId } = state;
+  const { viewYear, viewMonth, locale, calendarId, labels } = state;
   const isRTL = state._isRTL;
   const prevArrow = isRTL ? chevronRight : chevronLeft;
   const nextArrow = isRTL ? chevronLeft : chevronRight;
@@ -23,16 +24,16 @@ export function renderHeader(state, view) {
   const headerTitle = formatMonthYear(viewYear, viewMonth, locale, calendarId);
 
   return `
-    <div class="idp-header" part="header" role="group" aria-label="Calendar navigation">
-      <button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="Previous month" type="button">
+    <div class="idp-header" part="header" role="group" aria-label="${escAttr(labels.calendarNavigation)}">
+      <button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="${escAttr(labels.previousMonth)}" type="button">
         ${prevArrow}
       </button>
       <div class="idp-header-title" part="header-title">
-        <button class="idp-header-btn" data-action="show-months" type="button" aria-label="Select month">
+        <button class="idp-header-btn" data-action="show-months" type="button" aria-label="${escAttr(labels.selectMonth)}">
           ${headerTitle} ${chevronDown}
         </button>
       </div>
-      <button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="Next month" type="button">
+      <button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="${escAttr(labels.nextMonth)}" type="button">
         ${nextArrow}
       </button>
     </div>
@@ -40,12 +41,13 @@ export function renderHeader(state, view) {
 }
 
 function renderYearViewHeader(state, prevArrow, nextArrow) {
+  const { labels } = state;
   const decadeStart = Math.floor(state.viewYear / 20) * 20;
   const decadeEnd = decadeStart + 19;
 
   return `
-    <div class="idp-header" part="header" role="group" aria-label="Year navigation">
-      <button class="idp-nav-btn" part="nav-prev" data-action="prev-decade" aria-label="Previous 20 years" type="button">
+    <div class="idp-header" part="header" role="group" aria-label="${escAttr(labels.yearSelection)}">
+      <button class="idp-nav-btn" part="nav-prev" data-action="prev-decade" aria-label="${escAttr(labels.previousDecade)}" type="button">
         ${prevArrow}
       </button>
       <div class="idp-header-title" part="header-title">
@@ -53,7 +55,7 @@ function renderYearViewHeader(state, prevArrow, nextArrow) {
           ${decadeStart} – ${decadeEnd}
         </button>
       </div>
-      <button class="idp-nav-btn" part="nav-next" data-action="next-decade" aria-label="Next 20 years" type="button">
+      <button class="idp-nav-btn" part="nav-next" data-action="next-decade" aria-label="${escAttr(labels.nextDecade)}" type="button">
         ${nextArrow}
       </button>
     </div>
@@ -61,10 +63,11 @@ function renderYearViewHeader(state, prevArrow, nextArrow) {
 }
 
 function renderMonthViewHeader(state) {
+  const { labels } = state;
   return `
-    <div class="idp-header" part="header" role="group" aria-label="Month selection">
+    <div class="idp-header" part="header" role="group" aria-label="${escAttr(labels.monthSelection)}">
       <div class="idp-header-title" part="header-title">
-        <button class="idp-header-btn" data-action="show-years" type="button" aria-label="Select year">
+        <button class="idp-header-btn" data-action="show-years" type="button" aria-label="${escAttr(labels.selectYear)}">
           ${state.viewYear} ${chevronDown}
         </button>
       </div>
@@ -77,7 +80,7 @@ function renderMonthViewHeader(state) {
  */
 export function renderYearGrid(state) {
   const decadeStart = Math.floor(state.viewYear / 20) * 20;
-  let html = '<div class="idp-year-grid" role="grid" aria-label="Year selection">';
+  let html = `<div class="idp-year-grid" role="grid" aria-label="${escAttr(state.labels.yearSelection)}">`;
 
   for (let y = decadeStart; y < decadeStart + 20; y++) {
     const isCurrent = y === state.viewYear;
@@ -99,7 +102,7 @@ export function renderYearGrid(state) {
  */
 export function renderMonthGrid(state) {
   const months = getMonthOptions(state.calendarId, state.viewYear, state.locale);
-  let html = '<div class="idp-month-grid" role="grid" aria-label="Month selection">';
+  let html = `<div class="idp-month-grid" role="grid" aria-label="${escAttr(state.labels.monthSelection)}">`;
 
   for (const month of months) {
     const isCurrent = month.value === state.viewMonth;

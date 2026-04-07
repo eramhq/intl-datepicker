@@ -99,6 +99,35 @@ export interface RangePreset {
 
 export type DisabledDatesFilterFn = (date: { year: number; month: number; day: number }) => boolean;
 
+// ── Labels API ──
+
+/**
+ * Localized strings used by the picker. All keys are optional in user
+ * overrides — missing keys fall through to the locale defaults (English,
+ * Persian, Arabic, Hebrew shipped) and finally to English.
+ */
+export interface IntlDatepickerLabels {
+  today?: string;
+  clear?: string;
+  clearDate?: string;
+  datePicker?: string;
+  rangePresets?: string;
+  calendarNavigation?: string;
+  monthSelection?: string;
+  yearSelection?: string;
+  previousMonth?: string;
+  nextMonth?: string;
+  previousDecade?: string;
+  nextDecade?: string;
+  selectMonth?: string;
+  selectYear?: string;
+  weekNumber?: string;
+  pleaseSelectDate?: string;
+}
+
+/** Override for `parseInput`'s segment-order auto detection. */
+export type DateFormat = 'auto' | 'YMD' | 'DMY' | 'MDY';
+
 // ── Custom element ──
 
 export declare class IntlDatepickerElement extends HTMLElement {
@@ -111,8 +140,10 @@ export declare class IntlDatepickerElement extends HTMLElement {
   mapDays: MapDaysFn | null;
   presets: RangePreset[] | null;
   disabledDatesFilter: DisabledDatesFilterFn | null;
-  /** Alias for `disabledDatesFilter`. */
+  /** Alias for `disabledDatesFilter`. Will be removed in v0.2 — prefer `disabledDatesFilter`. */
   isDateDisabled: DisabledDatesFilterFn | null;
+  /** Localized strings; setting merges with locale defaults per-key. */
+  labels: IntlDatepickerLabels;
 
   // --- Read-only properties ---
 
