@@ -10,6 +10,7 @@ export function createState(options = {}) {
   const {
     calendarId = 'gregory',
     locale = 'en-US',
+    numerals = null,
     value = null,
     type = 'date',
     min = null,
@@ -21,6 +22,7 @@ export function createState(options = {}) {
     isRTL = false,
     maxDates = null,
     sortDates = false,
+    fixedWeeks = false,
     labels = null,
   } = options;
 
@@ -65,6 +67,7 @@ export function createState(options = {}) {
     calendarId,
     calendar,
     locale,
+    numerals,
     type,
     selectedDate,
     selectedDates,
@@ -85,6 +88,7 @@ export function createState(options = {}) {
     _isRTL: isRTL,
     maxDates: maxDates || null,
     sortDates,
+    fixedWeeks,
     labels: labels || resolveLabels(locale, null),
   };
 }

@@ -1,13 +1,13 @@
 import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
 import { getStyles, getStylesText, calendarIcon, clearIcon, chevronLeft, chevronRight } from './styles.js';
-import { resolveLocale, isRTL, getWeekdayNames, getMinimalDays, isCalendarRegistered } from './core/locale.js';
+import { resolveLocale, isRTL, getWeekdayNames, getMinimalDays, isCalendarRegistered, applyNumerals } from './core/locale.js';
 import { calendarDateToNative, resolveIntlCalendar, getTimeZone, resolveRelativeDate, escAttr, parseJSONAttr } from './utils/common.js';
 import {
   createState, updateState, selectDate, moveFocus,
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
   isoWeekToCalendarDate, parseTypedValue,
 } from './core/state.js';
-import { generateMonthGrid } from './core/calendar-grid.js';
+import { generateMonthGrid, getMonthCount } from './core/calendar-grid.js';
 import { renderHeader, renderYearGrid, renderMonthGrid as renderMonthPicker } from './core/calendar-header.js';
 import { formatDateShort, formatRange, formatMonthYear, getGregorianEquivalent } from './utils/format.js';
 import { positionCalendar } from './core/positioning.js';
@@ -20,6 +20,7 @@ const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 let openInstance = null;
 
 const VALID_TYPES = ['date', 'range', 'week', 'multiple', 'month', 'year'];
+const VALID_CAPTION_LAYOUTS = new Set(['dropdown', 'dropdown-months', 'dropdown-years']);
 
 function parsePositiveInt(val) {
   const n = parseInt(val);
@@ -40,7 +41,7 @@ class IntlDatepicker extends HTMLElementBase {
 
   static get observedAttributes() {
     return [
-      'calendar', 'locale', 'value', 'type', 'min', 'max',
+      'calendar', 'locale', 'numerals', 'value', 'type', 'min', 'max',
       'for', 'inline', 'disabled', 'readonly', 'required',
       'placeholder', 'show-alternate', 'name',
       'disabled-dates', 'disable-weekends',
@@ -48,6 +49,7 @@ class IntlDatepicker extends HTMLElementBase {
       'months', 'presets', 'no-animation',
       'show-week-numbers', 'hide-outside-days', 'allow-input',
       'labels', 'date-format',
+      'caption-layout', 'fixed-weeks',
     ];
   }
 
@@ -108,6 +110,7 @@ class IntlDatepicker extends HTMLElementBase {
     switch (name) {
       case 'calendar':
       case 'locale':
+      case 'numerals':
       case 'type':
       case 'min':
       case 'max':
@@ -127,6 +130,8 @@ class IntlDatepicker extends HTMLElementBase {
       case 'show-week-numbers':
       case 'hide-outside-days':
       case 'allow-input':
+      case 'fixed-weeks':
+        this._state = updateState(this._state, { fixedWeeks: this.hasAttribute('fixed-weeks') });
         this._render();
         break;
       case 'for':
@@ -156,6 +161,7 @@ class IntlDatepicker extends HTMLElementBase {
       case 'months':
       case 'presets':
       case 'no-animation':
+      case 'caption-layout':
         this._render();
         break;
       case 'labels':
@@ -237,21 +243,21 @@ class IntlDatepicker extends HTMLElementBase {
   get displayValue() {
     if (!this._state) return '';
     if (this._state.type === 'range' || this._state.type === 'week') {
-      return formatRange(this._state.rangeStart, this._state.rangeEnd, this._state.locale, this._state.calendarId);
+      return formatRange(this._state.rangeStart, this._state.rangeEnd, this._state.locale, this._state.calendarId, this._state.numerals);
     }
     if (this._state.type === 'multiple') {
       const dates = this._state.selectedDates || [];
       if (dates.length === 0) return '';
       const sep = this.getAttribute('date-separator') || ', ';
-      return dates.map(d => formatDateShort(d, this._state.locale, this._state.calendarId)).join(sep);
+      return dates.map(d => formatDateShort(d, this._state.locale, this._state.calendarId, this._state.numerals)).join(sep);
     }
     if (this._state.type === 'month' && this._state.selectedDate) {
-      return formatMonthYear(this._state.selectedDate.year, this._state.selectedDate.month, this._state.locale, this._state.calendarId);
+      return formatMonthYear(this._state.selectedDate.year, this._state.selectedDate.month, this._state.locale, this._state.calendarId, this._state.numerals);
     }
     if (this._state.type === 'year' && this._state.selectedDate) {
       return this._formatYearDisplay(this._state.selectedDate.year);
     }
-    return formatDateShort(this._state.selectedDate, this._state.locale, this._state.calendarId);
+    return formatDateShort(this._state.selectedDate, this._state.locale, this._state.calendarId, this._state.numerals);
   }
 
   get rangeStart() {
@@ -421,6 +427,33 @@ class IntlDatepicker extends HTMLElementBase {
     this._applyLabels();
   }
 
+  get numerals() {
+    return this.getAttribute('numerals');
+  }
+
+  set numerals(val) {
+    if (val) this.setAttribute('numerals', val);
+    else this.removeAttribute('numerals');
+  }
+
+  get captionLayout() {
+    return this._getCaptionLayout();
+  }
+
+  set captionLayout(val) {
+    if (val && val !== 'button') this.setAttribute('caption-layout', val);
+    else this.removeAttribute('caption-layout');
+  }
+
+  get fixedWeeks() {
+    return this.hasAttribute('fixed-weeks');
+  }
+
+  set fixedWeeks(val) {
+    if (val) this.setAttribute('fixed-weeks', '');
+    else this.removeAttribute('fixed-weeks');
+  }
+
   // --- Form callbacks ---
 
   get form() { return this._internals?.form; }
@@ -460,12 +493,15 @@ class IntlDatepicker extends HTMLElementBase {
       console.warn(`[intl-datepicker] Unknown type="${type}". Valid types: ${VALID_TYPES.join(', ')}. Falling back to "date".`);
     }
 
+    const numerals = this.getAttribute('numerals') || null;
+
     this._userLabelsFromAttr = parseJSONAttr(this.getAttribute('labels'), isPlainObject);
     const userLabels = this._mergedUserLabels();
 
     this._state = createState({
       calendarId,
       locale,
+      numerals,
       value: this.getAttribute('value') || null,
       type: isValidType ? type : 'date',
       min: this.getAttribute('min') || null,
@@ -477,16 +513,18 @@ class IntlDatepicker extends HTMLElementBase {
       isRTL: isRTL(locale),
       maxDates,
       sortDates: this.hasAttribute('sort-dates'),
+      fixedWeeks: this.hasAttribute('fixed-weeks'),
       labels: resolveLabels(locale, userLabels),
     });
 
     // Cache formatters that depend on locale/calendar (avoid re-creation per cell)
     const intlCal = resolveIntlCalendar(calendarId);
-    this._dayLabelFormatter = new Intl.DateTimeFormat(locale, {
+    const effectiveLocale = applyNumerals(locale, numerals);
+    this._dayLabelFormatter = new Intl.DateTimeFormat(effectiveLocale, {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       calendar: intlCal,
     });
-    this._dayNumberFormatter = new Intl.NumberFormat(locale, { useGrouping: false });
+    this._dayNumberFormatter = new Intl.NumberFormat(effectiveLocale, { useGrouping: false });
     this._minimalDays = getMinimalDays(locale);
 
     this._parsedPresets = parseJSONAttr(this.getAttribute('presets'), Array.isArray);
@@ -673,11 +711,17 @@ class IntlDatepicker extends HTMLElementBase {
     this.shadowRoot.innerHTML = html;
   }
 
+  _getCaptionLayout() {
+    const val = this.getAttribute('caption-layout');
+    return VALID_CAPTION_LAYOUTS.has(val) ? val : 'button';
+  }
+
   _renderCalendarInner(showAlternate) {
     const monthCount = this._getMonthCount();
+    const captionLayout = this._getCaptionLayout();
 
     if (this._view === 'years' || this._view === 'months' || monthCount <= 1) {
-      let inner = renderHeader(this._state, this._view);
+      let inner = renderHeader(this._state, this._view, captionLayout);
 
       if (this._view === 'years') {
         inner += renderYearGrid(this._state);
@@ -695,7 +739,7 @@ class IntlDatepicker extends HTMLElementBase {
     let inner = '<div class="idp-months-container">';
     for (let i = 0; i < monthCount; i++) {
       const panelState = this._getOffsetState(i);
-      const headerTitle = formatMonthYear(panelState.viewYear, panelState.viewMonth, panelState.locale, panelState.calendarId);
+      const headerTitle = formatMonthYear(panelState.viewYear, panelState.viewMonth, panelState.locale, panelState.calendarId, panelState.numerals);
       const isFirst = i === 0;
       const isLast = i === monthCount - 1;
       const isRTL = this._state._isRTL;
@@ -721,7 +765,7 @@ class IntlDatepicker extends HTMLElementBase {
     `;
 
     if (showAlternate && this._state.selectedDate) {
-      const alt = getGregorianEquivalent(this._state.selectedDate, this._state.locale);
+      const alt = getGregorianEquivalent(this._state.selectedDate, this._state.locale, this._state.numerals);
       html += `<div class="idp-alternate" part="alternate">${alt}</div>`;
     }
 
@@ -833,7 +877,7 @@ class IntlDatepicker extends HTMLElementBase {
 
   _renderDayGrid(overrideState, precomputedLabel) {
     const state = overrideState || this._state;
-    const weekdays = getWeekdayNames(state.locale, 'narrow');
+    const weekdays = getWeekdayNames(state.locale, 'narrow', state.numerals);
     const grid = generateMonthGrid(state);
     const showWeekNumbers = this.hasAttribute('show-week-numbers');
     const hideOutsideDays = this.hasAttribute('hide-outside-days');
@@ -848,7 +892,7 @@ class IntlDatepicker extends HTMLElementBase {
     }
     html += '</div>';
 
-    const gridLabel = precomputedLabel || formatMonthYear(state.viewYear, state.viewMonth, state.locale, state.calendarId);
+    const gridLabel = precomputedLabel || formatMonthYear(state.viewYear, state.viewMonth, state.locale, state.calendarId, state.numerals);
     html += `<div class="idp-days" role="grid" aria-label="${gridLabel}" style="grid-template-columns:repeat(${cols},1fr)">`;
 
     const mapDaysFn = this._mapDays;
@@ -962,6 +1006,31 @@ class IntlDatepicker extends HTMLElementBase {
 
       const action = btn.dataset.action;
       this._handleAction(action, btn);
+    });
+
+    // Handle caption-layout dropdown changes
+    shadow.addEventListener('change', (e) => {
+      const select = e.target.closest('select.idp-dropdown[data-action]');
+      if (!select) return;
+      const action = select.dataset.action;
+      const val = parseInt(select.value);
+      if (isNaN(val)) return;
+
+      let year = this._state.viewYear;
+      let month = this._state.viewMonth;
+      if (action === 'dropdown-month') {
+        month = val;
+      } else if (action === 'dropdown-year') {
+        year = val;
+        // Clamp month if switching from a Hebrew leap year (13 months) to non-leap (12)
+        const maxMonth = getMonthCount(this._state.calendar, year);
+        if (month > maxMonth) month = maxMonth;
+      } else {
+        return;
+      }
+      this._state = goToMonth(this._state, year, month);
+      this._renderCalendarContent();
+      this._emit('intl-navigate', { year, month, direction: 'forward' });
     });
 
     // Handle direct input blur (allow-input mode)
@@ -1321,7 +1390,7 @@ class IntlDatepicker extends HTMLElementBase {
     if (!calendar) return;
 
     const focusable = Array.from(
-      calendar.querySelectorAll('button:not([disabled]):not([hidden]), [tabindex="0"]'),
+      calendar.querySelectorAll('button:not([disabled]):not([hidden]), select:not([disabled]), [tabindex="0"]'),
     );
     if (focusable.length === 0) return;
 
@@ -1574,6 +1643,7 @@ class IntlDatepicker extends HTMLElementBase {
       this._state.viewMonth,
       this._state.locale,
       this._state.calendarId,
+      this._state.numerals,
     );
     live.textContent = '';
     requestAnimationFrame(() => { live.textContent = text; });
@@ -1655,7 +1725,7 @@ class IntlDatepicker extends HTMLElementBase {
     try {
       const date = new CalendarDate(this._state.calendar, year, 1, 1);
       const intlCal = resolveIntlCalendar(this._state.calendarId);
-      const formatter = new Intl.DateTimeFormat(this._state.locale, {
+      const formatter = new Intl.DateTimeFormat(applyNumerals(this._state.locale, this._state.numerals), {
         year: 'numeric',
         calendar: intlCal,
       });

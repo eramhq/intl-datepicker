@@ -128,6 +128,9 @@ export interface IntlDatepickerLabels {
 /** Override for `parseInput`'s segment-order auto detection. */
 export type DateFormat = 'auto' | 'YMD' | 'DMY' | 'MDY';
 
+/** Caption layout mode for the calendar header. */
+export type CaptionLayout = 'button' | 'dropdown' | 'dropdown-months' | 'dropdown-years';
+
 // ── Custom element ──
 
 export declare class IntlDatepickerElement extends HTMLElement {
@@ -144,6 +147,12 @@ export declare class IntlDatepickerElement extends HTMLElement {
   isDateDisabled: DisabledDatesFilterFn | null;
   /** Localized strings; setting merges with locale defaults per-key. */
   labels: IntlDatepickerLabels;
+  /** Override the locale's default numbering system (e.g., 'latn' for Latin digits). */
+  numerals: string | null;
+  /** Caption layout mode: 'button' (default), 'dropdown', 'dropdown-months', 'dropdown-years'. */
+  captionLayout: CaptionLayout;
+  /** When true, always render 6 rows (42 day cells) per month for consistent height. */
+  fixedWeeks: boolean;
 
   // --- Read-only properties ---
 

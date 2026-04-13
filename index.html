@@ -426,6 +426,9 @@
             <a href="#sec-inline">Inline + Min/Max</a>
             <a href="#sec-multi-month">Multi-Month</a>
             <a href="#sec-display">Display Options</a>
+            <a href="#sec-numerals">Numerals</a>
+            <a href="#sec-caption-layout">Caption Layout</a>
+            <a href="#sec-fixed-weeks">Fixed Weeks</a>
           </div>
           <div class="toc-group">
             <div class="toc-group-title">Customization</div>
@@ -732,6 +735,90 @@
           <label><input type="checkbox" data-toggle-attr="no-animation" data-target="demo-display"> no-animation</label>
         </div>
         <intl-datepicker id="demo-display" inline show-week-numbers calendar="gregory" locale="en-US"></intl-datepicker>
+      </section>
+
+      <!-- Numerals -->
+      <section id="sec-numerals" class="demo-section">
+        <h2>Numerals Override</h2>
+        <p>Decouple the numeral system from the locale. Use Persian calendar with Latin digits, or Gregorian calendar with Arabic-Indic numerals.</p>
+        <div class="attr-list">
+          <span class="attr-tag">numerals</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker locale="fa-IR" calendar="persian" numerals="latn"&gt;&lt;/intl-datepicker&gt;
+&lt;intl-datepicker locale="en-US" calendar="gregory" numerals="arab"&gt;&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <div>
+            <p><strong>Persian + Latin digits</strong></p>
+            <intl-datepicker locale="fa-IR" calendar="persian" numerals="latn" inline></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>English + Arabic-Indic digits</strong></p>
+            <intl-datepicker locale="en-US" calendar="gregory" numerals="arab" inline></intl-datepicker>
+          </div>
+        </div>
+      </section>
+
+      <!-- Caption Layout -->
+      <section id="sec-caption-layout" class="demo-section">
+        <h2>Caption Layout (Dropdowns)</h2>
+        <p>Replace the header title button with month and/or year dropdown selects for quick navigation to distant dates.</p>
+        <div class="attr-list">
+          <span class="attr-tag">caption-layout</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker caption-layout="dropdown"&gt;&lt;/intl-datepicker&gt;
+&lt;intl-datepicker caption-layout="dropdown-months"&gt;&lt;/intl-datepicker&gt;
+&lt;intl-datepicker caption-layout="dropdown-years"&gt;&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <div>
+            <p><strong>dropdown</strong></p>
+            <intl-datepicker caption-layout="dropdown" inline></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>dropdown-months</strong></p>
+            <intl-datepicker caption-layout="dropdown-months" inline></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>dropdown-years</strong></p>
+            <intl-datepicker caption-layout="dropdown-years" inline></intl-datepicker>
+          </div>
+        </div>
+        <div style="margin-top:1.5rem">
+          <p><strong>Persian + dropdown + min/max</strong></p>
+          <intl-datepicker locale="fa-IR" calendar="persian" caption-layout="dropdown" min="2020-01-01" max="2030-12-31" inline></intl-datepicker>
+        </div>
+      </section>
+
+      <!-- Fixed Weeks -->
+      <section id="sec-fixed-weeks" class="demo-section">
+        <h2>Fixed Weeks (6 Rows)</h2>
+        <p>Always render 6 rows of days for consistent calendar height, regardless of the month.</p>
+        <div class="attr-list">
+          <span class="attr-tag">fixed-weeks</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker fixed-weeks inline&gt;&lt;/intl-datepicker&gt;
+&lt;intl-datepicker fixed-weeks hide-outside-days inline&gt;&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <div>
+            <p><strong>Fixed weeks</strong></p>
+            <intl-datepicker fixed-weeks inline></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>Fixed weeks + hide outside days</strong></p>
+            <intl-datepicker fixed-weeks hide-outside-days inline></intl-datepicker>
+          </div>
+        </div>
       </section>
 
       <!-- ════════════ CUSTOMIZATION ════════════ -->

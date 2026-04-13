@@ -97,6 +97,17 @@ export function getMinimalDays(locale) {
 }
 
 /**
+ * Apply a numbering system override to a locale string.
+ * Returns the locale with `-u-nu-{numerals}` appended (or replaced).
+ */
+export function applyNumerals(locale, numerals) {
+  if (!numerals) return locale;
+  try {
+    return new Intl.Locale(locale, { numberingSystem: numerals }).toString();
+  } catch { return locale; }
+}
+
+/**
  * Resolve locale string. Priority: explicit > document lang > navigator.language
  */
 export function resolveLocale(explicit) {
@@ -113,8 +124,9 @@ export function resolveLocale(explicit) {
 /**
  * Get localized weekday names.
  */
-export function getWeekdayNames(locale, format = 'short') {
-  const formatter = new Intl.DateTimeFormat(locale, { weekday: format });
+export function getWeekdayNames(locale, format = 'short', numerals = null) {
+  const effectiveLocale = applyNumerals(locale, numerals);
+  const formatter = new Intl.DateTimeFormat(effectiveLocale, { weekday: format });
   const names = [];
   // Jan 1 2024 is a Monday
   for (let d = 0; d < 7; d++) {

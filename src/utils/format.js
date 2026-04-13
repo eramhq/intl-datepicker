@@ -1,14 +1,14 @@
 import { CalendarDate } from '@internationalized/date';
-import { getCalendar } from '../core/locale.js';
+import { getCalendar, applyNumerals } from '../core/locale.js';
 import { calendarDateToNative, resolveIntlCalendar } from './common.js';
 
 /**
  * Format a CalendarDate for display using Intl.DateTimeFormat.
  */
-export function formatDate(date, locale, calendarId, options = {}) {
+export function formatDate(date, locale, calendarId, options = {}, numerals = null) {
   if (!date) return '';
   const intlCalendar = resolveIntlCalendar(calendarId);
-  const formatter = new Intl.DateTimeFormat(locale, {
+  const formatter = new Intl.DateTimeFormat(applyNumerals(locale, numerals), {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -21,10 +21,10 @@ export function formatDate(date, locale, calendarId, options = {}) {
 /**
  * Format a CalendarDate as a short display string (e.g., "1403/06/15").
  */
-export function formatDateShort(date, locale, calendarId) {
+export function formatDateShort(date, locale, calendarId, numerals = null) {
   if (!date) return '';
   const intlCalendar = resolveIntlCalendar(calendarId);
-  const formatter = new Intl.DateTimeFormat(locale, {
+  const formatter = new Intl.DateTimeFormat(applyNumerals(locale, numerals), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -36,20 +36,20 @@ export function formatDateShort(date, locale, calendarId) {
 /**
  * Format a date range for display.
  */
-export function formatRange(start, end, locale, calendarId) {
+export function formatRange(start, end, locale, calendarId, numerals = null) {
   if (!start) return '';
-  if (!end) return formatDateShort(start, locale, calendarId);
-  return `${formatDateShort(start, locale, calendarId)} – ${formatDateShort(end, locale, calendarId)}`;
+  if (!end) return formatDateShort(start, locale, calendarId, numerals);
+  return `${formatDateShort(start, locale, calendarId, numerals)} – ${formatDateShort(end, locale, calendarId, numerals)}`;
 }
 
 /**
  * Format month and year for the calendar header.
  */
-export function formatMonthYear(year, month, locale, calendarId) {
+export function formatMonthYear(year, month, locale, calendarId, numerals = null) {
   const calendar = getCalendar(calendarId);
   const date = new CalendarDate(calendar, year, month, 1);
   const intlCalendar = resolveIntlCalendar(calendarId);
-  const formatter = new Intl.DateTimeFormat(locale, {
+  const formatter = new Intl.DateTimeFormat(applyNumerals(locale, numerals), {
     year: 'numeric',
     month: 'long',
     calendar: intlCalendar,
@@ -60,9 +60,9 @@ export function formatMonthYear(year, month, locale, calendarId) {
 /**
  * Get the Gregorian equivalent string for a calendar date (for show-alternate).
  */
-export function getGregorianEquivalent(date, locale) {
+export function getGregorianEquivalent(date, locale, numerals = null) {
   if (!date) return '';
-  const formatter = new Intl.DateTimeFormat(locale || 'en-US', {
+  const formatter = new Intl.DateTimeFormat(applyNumerals(locale || 'en-US', numerals), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

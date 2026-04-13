@@ -194,6 +194,42 @@ const CSS = /* css */`
     background: var(--idp-hover);
   }
 
+  /* --- Caption-layout dropdowns --- */
+  .idp-header-dropdowns {
+    gap: 6px;
+  }
+
+  .idp-dropdown {
+    font: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--idp-text);
+    background: var(--idp-bg);
+    border: 1px solid var(--idp-border);
+    border-radius: 4px;
+    padding: 4px 24px 4px 8px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+  }
+
+  :host([dir="rtl"]) .idp-dropdown {
+    padding: 4px 8px 4px 24px;
+    background-position: left 6px center;
+  }
+
+  .idp-dropdown:hover {
+    border-color: var(--idp-primary);
+  }
+
+  .idp-dropdown:focus-visible {
+    outline: 2px solid var(--idp-primary);
+    outline-offset: 2px;
+  }
+
   /* --- Year dropdown --- */
   .idp-year-grid {
     display: grid;

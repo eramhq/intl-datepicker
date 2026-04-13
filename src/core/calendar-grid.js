@@ -7,7 +7,7 @@ import {
   toCalendar,
   today,
 } from '@internationalized/date';
-import { getCalendar } from './locale.js';
+import { getCalendar, applyNumerals } from './locale.js';
 import { isDateDisabled, isInRange, isRangeEdge, getHoveredWeekBounds } from './state.js';
 import { calendarDateToNative, resolveIntlCalendar, getTimeZone } from '../utils/common.js';
 
@@ -31,7 +31,8 @@ export function generateMonthGrid(state) {
   const grid = [];
   let current = weekStart;
 
-  for (let w = 0; w < weeks; w++) {
+  const totalWeeks = state.fixedWeeks ? 6 : weeks;
+  for (let w = 0; w < totalWeeks; w++) {
     const week = [];
     for (let d = 0; d < 7; d++) {
       const isCurrentMonth = isSameMonth(current, firstOfMonth);
@@ -85,10 +86,10 @@ export function getMonthCount(calendar, year) {
 /**
  * Get month names for a calendar year in the given locale.
  */
-export function getMonthOptions(calendarId, year, locale) {
+export function getMonthOptions(calendarId, year, locale, numerals = null) {
   const calendar = typeof calendarId === 'string' ? getCalendar(calendarId) : calendarId;
   const count = getMonthCount(calendar, year);
-  const formatter = new Intl.DateTimeFormat(locale, {
+  const formatter = new Intl.DateTimeFormat(applyNumerals(locale, numerals), {
     month: 'long',
     calendar: resolveIntlCalendar(calendarId),
   });

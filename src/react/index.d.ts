@@ -3,6 +3,7 @@ import type * as React from 'react';
 import type {
   DatepickerType,
   DateFormat,
+  CaptionLayout,
   SelectDetail,
   NavigateDetail,
   MapDaysFn,
@@ -34,6 +35,10 @@ export interface IntlDatepickerProps extends React.HTMLAttributes<IntlDatepicker
   months?: string | number;
   /** Override segment-order detection for typed input ('auto' | 'YMD' | 'DMY' | 'MDY'). */
   dateFormat?: DateFormat;
+  /** Override the locale's default numbering system (e.g., 'latn' for Latin digits). */
+  numerals?: string;
+  /** Caption layout: 'button' (default), 'dropdown', 'dropdown-months', 'dropdown-years'. */
+  captionLayout?: CaptionLayout;
 
   // Dual-form attributes (string for JSON form, object/array for direct form)
   presets?: string | RangePreset[];
@@ -51,6 +56,7 @@ export interface IntlDatepickerProps extends React.HTMLAttributes<IntlDatepicker
   showWeekNumbers?: boolean;
   hideOutsideDays?: boolean;
   allowInput?: boolean;
+  fixedWeeks?: boolean;
 
   // JS-only properties (passed via property setter, not attribute)
   mapDays?: MapDaysFn | null;
@@ -115,6 +121,9 @@ declare global {
           'show-week-numbers'?: boolean;
           'hide-outside-days'?: boolean;
           'allow-input'?: boolean;
+          'fixed-weeks'?: boolean;
+          numerals?: string;
+          'caption-layout'?: CaptionLayout;
           'disabled-dates'?: string;
           'date-separator'?: string;
           'date-format'?: DateFormat;

@@ -7,13 +7,14 @@ const BOOLEAN_ATTRS = [
   'inline', 'disabled', 'readonly', 'required', 'show-alternate',
   'disable-weekends', 'sort-dates', 'no-animation',
   'show-week-numbers', 'hide-outside-days', 'allow-input',
+  'fixed-weeks',
 ];
 
 const STRING_ATTRS = [
-  'calendar', 'locale', 'value', 'type', 'min', 'max',
+  'calendar', 'locale', 'numerals', 'value', 'type', 'min', 'max',
   'for', 'placeholder', 'name',
   'disabled-dates', 'date-separator', 'max-dates',
-  'months', 'date-format',
+  'months', 'date-format', 'caption-layout',
 ];
 
 // Camel-cased lookup of every attribute name we manage so we can route
