@@ -1,8 +1,8 @@
 # intl-datepicker
 
-> **Status: pre-release (alpha).** APIs are stabilizing for v0.2 but may still
-> change. Browser cross-version verification is in progress — if you spot a
-> rough edge, please file an issue.
+> **Status: v0.1.x — usable and tested.** Per semver, breaking API changes
+> remain possible on minor bumps until 1.0. If you spot a rough edge, please
+> file an issue.
 
 A framework-agnostic, multi-calendar datepicker Web Component powered by `Intl.DateTimeFormat`.
 

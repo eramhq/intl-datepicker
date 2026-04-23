@@ -62,13 +62,15 @@
     "./dist/calendars/*.js"
   ],
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm test && npm run build"
   },
   "dependencies": {
     "@internationalized/date": "^3.12.0",
@@ -103,6 +105,10 @@
   "author": "Navid Kashani",
   "repository": {
     "type": "git",
-    "url": "https://github.com/navidkashani/intl-datepicker"
+    "url": "git+https://github.com/eramhq/intl-datepicker.git"
+  },
+  "homepage": "https://github.com/eramhq/intl-datepicker#readme",
+  "bugs": {
+    "url": "https://github.com/eramhq/intl-datepicker/issues"
   }
 }
