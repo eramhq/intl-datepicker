@@ -59,7 +59,10 @@
   "sideEffects": [
     "./dist/intl-datepicker.js",
     "./dist/full.js",
-    "./dist/calendars/*.js"
+    "./dist/calendars/*.js",
+    "./src/intl-datepicker.js",
+    "./src/full.js",
+    "./src/calendars/*.js"
   ],
   "files": [
     "dist",
