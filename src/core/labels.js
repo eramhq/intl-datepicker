@@ -2,13 +2,8 @@
  * Localized labels for every visible / accessible string in the component.
  *
  * Resolution order: English defaults ← locale defaults ← user overrides.
- * Built-in defaults are shipped for the project's hero RTL locales (en, fa, ar, he).
- * Other locales fall back to English so the API works everywhere — users can override
- * individual keys via the `labels` property/attribute.
- *
- * NOTE: The fa/ar/he translations should be reviewed by native speakers before
- * the v0.2 release. They're correct enough to be useful, but ship as community-
- * reviewable defaults rather than authoritative translations.
+ * English ships inline; other locales are opt-in via `intl-datepicker/labels/{lang}`,
+ * mirroring the calendar plugin pattern. `intl-datepicker/full` registers all of them.
  */
 
 export const DEFAULT_LABELS_EN = Object.freeze({
@@ -34,77 +29,19 @@ export const DEFAULT_LABELS_EN = Object.freeze({
   pleaseSelectDate: 'Please select a date',
 });
 
-export const LABELS_FA = Object.freeze({
-  today: 'امروز',
-  clear: 'پاک کردن',
-  clearDate: 'پاک کردن تاریخ',
-  datePicker: 'انتخاب تاریخ',
-  rangePresets: 'پیش‌فرض‌های بازه تاریخ',
-  calendarNavigation: 'پیمایش تقویم',
-  monthSelection: 'انتخاب ماه',
-  yearSelection: 'انتخاب سال',
-  previousMonth: 'ماه قبل',
-  nextMonth: 'ماه بعد',
-  previousDecade: 'بیست سال قبل',
-  nextDecade: 'بیست سال بعد',
-  selectMonth: 'انتخاب ماه',
-  selectYear: 'انتخاب سال',
-  weekNumber: 'شماره هفته',
-  pleaseSelectDate: 'لطفاً یک تاریخ انتخاب کنید',
-});
-
-export const LABELS_AR = Object.freeze({
-  today: 'اليوم',
-  clear: 'مسح',
-  clearDate: 'مسح التاريخ',
-  datePicker: 'منتقي التاريخ',
-  rangePresets: 'إعدادات نطاق التاريخ',
-  calendarNavigation: 'التنقل في التقويم',
-  monthSelection: 'اختيار الشهر',
-  yearSelection: 'اختيار السنة',
-  previousMonth: 'الشهر السابق',
-  nextMonth: 'الشهر التالي',
-  previousDecade: 'العشرون سنة السابقة',
-  nextDecade: 'العشرون سنة التالية',
-  selectMonth: 'اختر الشهر',
-  selectYear: 'اختر السنة',
-  weekNumber: 'رقم الأسبوع',
-  pleaseSelectDate: 'الرجاء اختيار تاريخ',
-});
-
-export const LABELS_HE = Object.freeze({
-  today: 'היום',
-  clear: 'נקה',
-  clearDate: 'נקה תאריך',
-  datePicker: 'בוחר תאריך',
-  rangePresets: 'טווחי תאריכים מוגדרים מראש',
-  calendarNavigation: 'ניווט בלוח השנה',
-  monthSelection: 'בחירת חודש',
-  yearSelection: 'בחירת שנה',
-  previousMonth: 'החודש הקודם',
-  nextMonth: 'החודש הבא',
-  previousDecade: '20 השנים הקודמות',
-  nextDecade: '20 השנים הבאות',
-  selectMonth: 'בחר חודש',
-  selectYear: 'בחר שנה',
-  weekNumber: 'מספר שבוע',
-  pleaseSelectDate: 'אנא בחר תאריך',
-});
-
-const BUILTIN_LOCALE_DEFAULTS = {
-  en: DEFAULT_LABELS_EN,
-  fa: LABELS_FA,
-  ar: LABELS_AR,
-  he: LABELS_HE,
-};
+const labelRegistry = new Map();
 
 /**
- * Resolve the label set for a given locale, applying user overrides on top.
- * Order: English defaults ← locale defaults (if shipped) ← user overrides.
+ * Register a built-in label set for a language code (e.g. 'fa', 'ar', 'he').
+ * Side-effect imports in `intl-datepicker/labels/{lang}` call this.
  */
+export function registerLabels(lang, labels) {
+  labelRegistry.set(lang, Object.freeze({ ...labels }));
+}
+
 export function resolveLabels(locale, userOverrides) {
   const lang = (locale || 'en').toLowerCase().split('-')[0];
-  const localeDefaults = BUILTIN_LOCALE_DEFAULTS[lang] || null;
+  const localeDefaults = lang === 'en' ? DEFAULT_LABELS_EN : labelRegistry.get(lang);
   const merged = { ...DEFAULT_LABELS_EN };
   if (localeDefaults) Object.assign(merged, localeDefaults);
   if (userOverrides && typeof userOverrides === 'object') {

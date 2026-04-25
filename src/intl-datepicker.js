@@ -1484,7 +1484,7 @@ class IntlDatepicker extends HTMLElementBase {
 
     if (trigger && calendar) {
       this._destroyPositioning();
-      this._positionCleanup = positionCalendar(trigger, calendar);
+      this._positionCleanup = positionCalendar(trigger, calendar, { isRTL: !!this._state?._isRTL });
     }
 
     // Animate open
@@ -1665,7 +1665,7 @@ class IntlDatepicker extends HTMLElementBase {
       const calendar = this.shadowRoot.querySelector('.idp-calendar');
       if (trigger && calendar) {
         this._destroyPositioning();
-        this._positionCleanup = positionCalendar(trigger, calendar);
+        this._positionCleanup = positionCalendar(trigger, calendar, { isRTL: !!this._state?._isRTL });
       }
     }
   }

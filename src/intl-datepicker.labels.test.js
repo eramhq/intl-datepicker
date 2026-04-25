@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  DEFAULT_LABELS_EN,
-  LABELS_FA,
-  LABELS_AR,
-  LABELS_HE,
-  resolveLabels,
-} from './core/labels.js';
+import { DEFAULT_LABELS_EN, resolveLabels } from './core/labels.js';
+import { LABELS_FA } from './labels/fa.js';
+import { LABELS_AR } from './labels/ar.js';
+import { LABELS_HE } from './labels/he.js';
 
 beforeAll(async () => {
   await import('./intl-datepicker.js');

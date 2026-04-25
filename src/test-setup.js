@@ -1,4 +1,5 @@
 import './calendars/all.js';
+import './labels/all.js';
 
 // jsdom's `ElementInternals` shim is partial — it has the constructor but
 // lacks `setFormValue`, `setValidity`, etc. Patch them with no-ops so the
