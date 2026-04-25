@@ -1,6 +1,6 @@
 {
   "name": "intl-datepicker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-agnostic multi-calendar datepicker Web Component powered by Intl.DateTimeFormat",
   "type": "module",
   "main": "dist/intl-datepicker.js",

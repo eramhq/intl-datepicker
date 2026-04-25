@@ -14,7 +14,7 @@ A framework-agnostic, multi-calendar datepicker Web Component powered by `Intl.D
 
 - **14 calendar systems** — Gregorian, Persian, Islamic (3 variants), Hebrew, Buddhist, Japanese, Indian, Ethiopic, Coptic, ROC, and more
 - **Locale-aware formatting** — month/day names, number formatting, and RTL support driven by `Intl`
-- **Built-in label translations** for English, Persian, Arabic, and Hebrew. Other locales fall back to English defaults; supply your own via the `labels` API
+- **Built-in label translations** for English (default), with opt-in entry points for Persian, Arabic, and Hebrew. Other locales fall back to English; supply your own via the `labels` API
 - **Multiple picker types** — date, range, week, multiple, month, year
 - **Zero-framework lock-in** — works with vanilla HTML, React, Vue, Svelte, or any framework
 - **SSR-safe** — importable in Node/Next.js without crashing; rendering is still client-only
@@ -44,6 +44,7 @@ Non-Gregorian calendars must be explicitly imported (they are tree-shakeable):
 ```js
 import 'intl-datepicker';
 import 'intl-datepicker/calendars/persian';
+import 'intl-datepicker/labels/fa'; // Persian UI strings (optional)
 ```
 
 ```html
@@ -53,8 +54,25 @@ import 'intl-datepicker/calendars/persian';
 Or import all 14 calendars at once:
 
 ```js
-import 'intl-datepicker/full'; // includes all calendar systems
+import 'intl-datepicker/full'; // includes all calendar systems and label sets
 ```
+
+### Locale Labels
+
+English labels ship with the main bundle. Persian, Arabic, and Hebrew label
+sets are tree-shakeable — import the ones you need:
+
+```js
+import 'intl-datepicker';
+import 'intl-datepicker/labels/fa';
+```
+
+```html
+<intl-datepicker locale="fa-IR"></intl-datepicker>
+```
+
+For any locale without a built-in set (or to override individual strings),
+pass a `labels` object via the attribute or property API.
 
 ## Picker Types
 
