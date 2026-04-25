@@ -68,6 +68,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:demo": "vite build --config vite.demo.config.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm test && npm run build"
