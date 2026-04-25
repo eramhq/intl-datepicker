@@ -1,5 +1,11 @@
 # intl-datepicker
 
+[![npm version](https://img.shields.io/npm/v/intl-datepicker.svg)](https://www.npmjs.com/package/intl-datepicker)
+[![CI](https://github.com/eramhq/intl-datepicker/actions/workflows/test.yml/badge.svg)](https://github.com/eramhq/intl-datepicker/actions/workflows/test.yml)
+[![license](https://img.shields.io/npm/l/intl-datepicker.svg)](LICENSE)
+
+**[Live demo →](https://eramhq.github.io/intl-datepicker/)**  ·  [npm package](https://www.npmjs.com/package/intl-datepicker)
+
 > **Status: v0.1.x — usable and tested.** Per semver, breaking API changes
 > remain possible on minor bumps until 1.0. If you spot a rough edge, please
 > file an issue.
