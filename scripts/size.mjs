@@ -2,10 +2,13 @@
 // `npm run build`. The main bundle is dist/intl-datepicker.js plus the local
 // chunks it imports (what `import 'intl-datepicker'` loads), gzipped at -9.
 // Raise LIMIT deliberately when a feature is worth the bytes.
+//
+// CI (ubuntu-latest, Node 24) is the reference: zlib output differs by
+// platform, and macOS measures about 60 B less.
 import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
-const LIMIT = 21_226; // v0.4.0 measured (20,926 B) + 300 B
+const LIMIT = 21_573; // v0.4.1 on CI (21,273 B) + 300 B
 
 const files = ['dist/intl-datepicker.js'];
 for (let i = 0; i < files.length; i++) {

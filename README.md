@@ -308,7 +308,7 @@ availability. "Check-in only" days aren't supported.
 | `months` | `number` | Number of side-by-side month panels (1–3) |
 | `presets` | `string` | JSON array of range presets (see below) |
 | `no-animation` | `boolean` | Disable open/close animations |
-| `show-week-numbers` | `boolean` | Show week numbers using the locale's week rules (first day and minimal days) |
+| `show-week-numbers` | `boolean` | Show week numbers using the locale's week rules: first day, and how many days of January week 1 needs (CLDR: 4 in most of Europe, 1 elsewhere) |
 | `hide-outside-days` | `boolean` | Hide days from adjacent months |
 | `fixed-weeks` | `boolean` | Always render six weeks so the height never changes |
 | `caption-layout` | `string` | Header layout: `button` (default), `dropdown`, `dropdown-months`, `dropdown-years` |
@@ -344,7 +344,7 @@ leap year; Esfand 30, 1403 = 2025-03-20), not the 33-year arithmetic rule.
 |---|---|---|
 | `intl-select` | `SelectDetail` | Fired when the user picks a date (click, keyboard, Today, preset, typed input) |
 | `intl-change` | `SelectDetail` | Fired whenever the value changes, including `setValue()`/`clear()`. Setting the same value again does not fire |
-| `intl-navigate` | `{ year, month, direction }` | Fired when the user navigates months |
+| `intl-navigate` | `{ year, month, direction, start, end }` | Fired when the user changes the visible month: buttons, dropdowns, the month/year views, keyboard, or Today. `year`/`month` are the first visible month in the active calendar; `start`/`end` are the Gregorian ISO bounds of all visible months |
 | `intl-open` | — | Cancelable. Fired before popup opens |
 | `intl-close` | — | Cancelable. Fired before popup closes |
 
@@ -485,27 +485,25 @@ Store `start` and `end` from the value (`"2026-10-03/2026-10-07"`) as two
 
 ### Availability from an API
 
-Load the visible months' availability as the user navigates. A pending
-check-in survives attribute updates, and the filter gets the Gregorian `iso`
-date, so a Persian or Hijri page matches the same backend data:
+Load the visible months' availability as the user navigates.
+`intl-navigate` gives the visible window as Gregorian `start`/`end`, and the
+filter gets each day's Gregorian `iso`, so a Persian or Hijri page queries
+and matches the same backend data. A pending check-in survives the update:
 
 ```js
 const picker = document.querySelector('intl-datepicker');
 const booked = new Set();
 
-async function loadAvailability() {
-  const res = await fetch('/api/booked-nights'); // ["2026-10-20", …]
+async function loadAvailability(start, end) {
+  const res = await fetch(`/api/booked-nights?from=${start}&to=${end}`); // ["2026-10-20", …]
   for (const iso of await res.json()) booked.add(iso);
   // Assigning the filter re-renders with the new data.
   picker.disabledDatesFilter = ({ iso }) => booked.has(iso);
 }
 
-loadAvailability();
-picker.addEventListener('intl-navigate', loadAvailability);
+picker.addEventListener('intl-navigate', ({ detail }) => loadAvailability(detail.start, detail.end));
+loadAvailability('2026-10-01', '2026-11-30'); // the initially visible months
 ```
-
-`intl-navigate`'s `year`/`month` are in the active calendar; if your API takes
-a date window, request a generous one around today.
 
 Or set ranges directly: `picker.setAttribute('disabled-dates', JSON.stringify(['2026-10-20/2026-10-22']))`.
 

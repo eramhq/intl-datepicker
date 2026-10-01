@@ -1,4 +1,4 @@
-import { toCalendar, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
+import { toCalendar, startOfWeek, endOfWeek, endOfMonth, isSameDay } from '@internationalized/date';
 import { getStyles, getStylesText, calendarIcon, clearIcon } from './styles.js';
 import { resolveLocale, isRTL, getMinimalDays, isCalendarRegistered } from './core/locale.js';
 import { calendarDateToNative, resolveRelativeDate, escAttr, parseJSONAttr } from './utils/common.js';
@@ -88,7 +88,7 @@ const HTMLElementBase = typeof HTMLElement !== 'undefined' ? HTMLElement : class
  *
  * @fires intl-select - A date was picked by the user. `detail` is a SelectDetail.
  * @fires intl-change - The value changed. `detail` is a SelectDetail.
- * @fires intl-navigate - The visible month changed. `detail` is `{year, month, direction}`.
+ * @fires intl-navigate - The visible month changed. `detail` is `{year, month, direction, start, end}`.
  * @fires intl-open - The popup is about to open. Cancelable.
  * @fires intl-close - The popup is about to close. Cancelable.
  *
@@ -192,6 +192,7 @@ class IntlDatepicker extends HTMLElementBase {
     this._formDisabled = false;
     this._inputError = '';
     this._pendingValue = undefined;
+    this._pickerFrom = null; // month left for the month/year views
   }
 
   connectedCallback() {
@@ -1145,9 +1146,10 @@ class IntlDatepicker extends HTMLElementBase {
           continue;
         }
 
-        // A check-out-only day stays selectable; range-blocked days and
-        // mapDays can force-disable.
-        const isDisabled = (cell.disabled && !cell.isCheckoutOnly) || cell.isRangeBlocked || mapped.disabled === true;
+        // A check-out-only day stays selectable, and so does a kept multiple
+        // date (to remove it); range-blocked days and mapDays can force-disable.
+        const keepClickable = cell.isCheckoutOnly || (type === 'multiple' && cell.isSelected);
+        const isDisabled = (cell.disabled && !keepClickable) || cell.isRangeBlocked || mapped.disabled === true;
 
         // Selection semantics come from the committed selection, never the
         // hover preview.
@@ -1238,6 +1240,7 @@ class IntlDatepicker extends HTMLElementBase {
       const select = e.target.closest('select.idp-dropdown[data-action]');
       if (!select) return;
       const { calendar, viewMonth } = this._state;
+      const before = firstOfView(this._state);
       // Options carry the ISO date of their month's / year's first day.
       let date = parseISOToCalendar(select.value, calendar);
       if (!date) return;
@@ -1248,7 +1251,7 @@ class IntlDatepicker extends HTMLElementBase {
       this._showMonth(date);
       this._renderCalendarContent();
       this._announceMonth();
-      this._emit('intl-navigate', { year: date.year, month: date.month, direction: 'forward' });
+      this._navigated(before);
     });
 
     // Commit typed text on blur (allow-input mode)
@@ -1400,18 +1403,15 @@ class IntlDatepicker extends HTMLElementBase {
         this._renderCalendarContent();
         break;
       case 'show-months':
-        this._view = 'months';
-        this._renderCalendarContent();
-        this._focusCurrentCell();
-        break;
       case 'show-years':
-        this._view = 'years';
+        // Remember the month left, to report navigation on the way back.
+        if (this._view === 'days') this._pickerFrom = firstOfView(this._state);
+        this._view = action === 'show-months' ? 'months' : 'years';
         this._renderCalendarContent();
         this._focusCurrentCell();
         break;
       case 'show-days':
-        this._view = 'days';
-        this._renderCalendarContent();
+        this._showDays();
         break;
       case 'select-year':
       case 'select-month': {
@@ -1428,11 +1428,12 @@ class IntlDatepicker extends HTMLElementBase {
           // Keep the visible month, clamped when leaving a 13-month year.
           const month = Math.min(this._state.viewMonth, this._state.calendar.getMonthsInYear(date));
           this._state = updateState(this._state, viewOf(date.add({ months: month - 1 })));
+          this._view = 'months';
+          this._renderCalendarContent();
         } else {
           this._showMonth(date);
+          this._showDays();
         }
-        this._view = isYear ? 'months' : 'days';
-        this._renderCalendarContent();
         this._focusCurrentCell();
         break;
       }
@@ -1458,15 +1459,35 @@ class IntlDatepicker extends HTMLElementBase {
   }
 
   _navigateMonth(delta) {
-    const next = firstOfView(this._state, delta);
-    this._state = updateState(this._state, viewOf(next));
+    const before = firstOfView(this._state);
+    this._state = updateState(this._state, viewOf(firstOfView(this._state, delta)));
     this._view = 'days';
     this._renderCalendarContent();
     this._announceMonth();
+    this._navigated(before);
+  }
+
+  // Back to the day grid from the month/year views.
+  _showDays() {
+    this._view = 'days';
+    this._renderCalendarContent();
+    if (this._pickerFrom) this._navigated(this._pickerFrom);
+    this._pickerFrom = null;
+  }
+
+  // Fire intl-navigate when the visible month is no longer `before`, with the
+  // Gregorian bounds of everything visible (all `months` panels), so a page in
+  // any calendar can load data for that window.
+  _navigated(before) {
+    const first = firstOfView(this._state);
+    const delta = first.compare(before);
+    if (!delta) return;
     this._emit('intl-navigate', {
-      year: next.year,
-      month: next.month,
+      year: first.year,
+      month: first.month,
       direction: delta > 0 ? 'forward' : 'backward',
+      start: toISO(first),
+      end: toISO(endOfMonth(firstOfView(this._state, this._getMonthCount() - 1))),
     });
   }
 
@@ -1526,6 +1547,7 @@ class IntlDatepicker extends HTMLElementBase {
     this._selectDate(todayDate);
     // Refused (e.g. by a range rule): stay on the month the user was viewing.
     if (this._state === shown) this._state = prev;
+    else if (this._view === 'days') this._navigated(firstOfView(prev));
   }
 
   _dateFromBtn(btn) {
@@ -1583,6 +1605,7 @@ class IntlDatepicker extends HTMLElementBase {
     }
     this._renderCalendarContent();
     this._focusCurrentCell();
+    this._navigated(oldView);
   }
 
   _handleMonthYearKeydown(e, cellSelector, actionName) {
@@ -1617,8 +1640,7 @@ class IntlDatepicker extends HTMLElementBase {
         if (this._state.type === 'month' || this._state.type === 'year') {
           this._closeCalendar();
         } else {
-          this._view = 'days';
-          this._renderCalendarContent();
+          this._showDays();
           this._focusCurrentCell();
         }
         return;
@@ -1726,6 +1748,7 @@ class IntlDatepicker extends HTMLElementBase {
 
     this._state = updateState(this._state, { isOpen: true, hoveredDate: null });
     this._view = this._initialView();
+    this._pickerFrom = null;
     this._render();
     this._showPanel();
 

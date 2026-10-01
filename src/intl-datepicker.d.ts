@@ -87,9 +87,14 @@ export type SelectDetail =
   | YearDetail;
 
 export interface NavigateDetail {
+  /** First visible month, in the active calendar. */
   year: number;
   month: number;
   direction: 'forward' | 'backward';
+  /** Gregorian ISO date of the first day of the first visible month, e.g. `"2026-03-21"`. */
+  start: string;
+  /** Gregorian ISO date of the last day of the last visible month (`months` panels). */
+  end: string;
 }
 
 // ── mapDays callback ──

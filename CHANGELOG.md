@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - Unreleased
+
+Follow-ups to 0.4.0. The main bundle grows by about 270 B gzip (CLDR week
+data and navigation bounds); the CI size budget is re-based on this release.
+
+### Added
+
+- `intl-navigate` detail has `start` and `end`: the Gregorian ISO bounds of
+  all visible months, so a Persian, Hijri or other calendar page can query an
+  API for exactly what's on screen.
+
+### Fixed
+
+- **Week numbers follow the locale in current browsers.** Engines no
+  longer report `minimalDays`, and the picker then assumed the ISO rule
+  everywhere, so `en-US` and most non-European locales showed ISO week
+  numbers. It now falls back to CLDR's data by region (4 in most of Europe,
+  1 elsewhere).
+- `intl-navigate` now also fires for keyboard navigation (arrows, Page Up/Down,
+  Home/End across a month edge), for picks in the month and year views, and for
+  Today; the dropdowns report the real direction instead of always `forward`.
+- In `type="multiple"`, a kept date that is disabled can be removed by clicking
+  it; it used to be stuck until Clear.
+- The Japanese year view labels an era-change year with both eras
+  ("31 Heisei – 1 Reiwa") instead of only the one on January 1st.
+
 ## [0.4.0] - 2026-10-01
 
 Selection rules: range rules, richer disabling and a first day of week.
@@ -249,6 +275,7 @@ to 16.0 KB gzipped); npm tarball drops from 39.9 KB to ~28 KB gzipped.
 - `CHANGELOG.md` is no longer included in the published tarball; refer to
   GitHub Releases or this file in the repository.
 
+[0.4.1]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.1
 [0.4.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.0
 [0.3.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.3.0
 [0.2.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.2.0

@@ -113,8 +113,24 @@ export function resolveFirstDayOfWeek(attr, locale) {
   return DAY_NAMES[day >= 0 ? day : getFirstDayOfWeek(locale) % 7];
 }
 
+// CLDR regions whose week 1 needs 4 days of the new year (ISO style);
+// everywhere else week 1 is the week containing January 1st. Space-separated
+// two-letter codes, so a substring match can only hit a whole code.
+const MIN_DAYS_4 = 'AD AT AX BE BG CH CZ DE DK EE ES FI FJ FO FR GB GF GG GI GP GR HU IE IM IS IT JE LI LT LU MC MQ NL NO PL PT RE RU SE SJ SK SM VA';
+
+/**
+ * Days of the new year week 1 must contain. Engines dropped `minimalDays`
+ * from Intl.Locale week info, so fall back to CLDR's data by region.
+ */
 export function getMinimalDays(locale) {
-  return getWeekInfoField(locale, 'minimalDays') ?? 4;
+  const days = getWeekInfoField(locale, 'minimalDays');
+  if (days) return days;
+  try {
+    const region = new Intl.Locale(locale).maximize().region;
+    return region && MIN_DAYS_4.includes(region) ? 4 : 1;
+  } catch {
+    return 4;
+  }
 }
 
 /**
