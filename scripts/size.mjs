@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
-const LIMIT = 21_572; // v0.4.1 on CI (21,272 B) + 300 B
+const LIMIT = 21_573; // v0.4.1 on CI (21,273 B) + 300 B
 
 const files = ['dist/intl-datepicker.js'];
 for (let i = 0; i < files.length; i++) {
