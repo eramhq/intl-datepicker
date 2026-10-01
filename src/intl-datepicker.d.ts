@@ -36,17 +36,39 @@ export interface MultipleDetail {
   formatted: string;
 }
 
+/**
+ * Month picker detail.
+ *
+ * `value` follows `Temporal.PlainYearMonth`: `"2024-07"` for Gregorian, or
+ * the ISO date of the month's first day plus a calendar annotation for other
+ * calendars, e.g. `"2024-07-22[u-ca=persian]"`.
+ */
 export interface MonthDetail {
   type: 'month';
   value: string;
+  /** Native year/month in the active calendar, e.g. `{ year: 1403, month: 5 }`. */
   calendar: { year: number; month: number } | null;
+  /** Gregorian ISO date of the month's first day, e.g. `"2024-07-22"`. */
+  start: string | null;
+  /** Gregorian ISO date of the month's last day, e.g. `"2024-08-21"`. */
+  end: string | null;
   formatted: string;
 }
 
+/**
+ * Year picker detail. `value` is `"2024"` for Gregorian, otherwise the ISO
+ * date of the year's first day plus a calendar annotation, e.g.
+ * `"2024-03-20[u-ca=persian]"`.
+ */
 export interface YearDetail {
   type: 'year';
   value: string;
+  /** Native year in the active calendar, e.g. `{ year: 1403 }`. */
   calendar: { year: number } | null;
+  /** Gregorian ISO date of the year's first day. */
+  start: string | null;
+  /** Gregorian ISO date of the year's last day. */
+  end: string | null;
   formatted: string;
 }
 
@@ -97,7 +119,8 @@ export interface RangePreset {
 
 // ── Disabled dates filter ──
 
-export type DisabledDatesFilterFn = (date: { year: number; month: number; day: number }) => boolean;
+/** `dayOfWeek` is 0 (Sunday) – 6 (Saturday). Date fields are in the active calendar. */
+export type DisabledDatesFilterFn = (date: { year: number; month: number; day: number; dayOfWeek: number }) => boolean;
 
 // ── Labels API ──
 
@@ -122,7 +145,23 @@ export interface IntlDatepickerLabels {
   selectMonth?: string;
   selectYear?: string;
   weekNumber?: string;
+  /** Appended to a day's accessible name, e.g. "June 15, 2024, selected". */
+  selected?: string;
+  rangeStart?: string;
+  rangeEnd?: string;
+  /** Live-region text for a completed range. Placeholders: `{start}`, `{end}`. */
+  rangeSelected?: string;
+  /** Hint under the input with `allow-input`. Placeholders: `{format}` (e.g. "MM/DD/YYYY"), `{example}`. */
+  formatHint?: string;
+  /** Error for unparseable typed input. Placeholders: `{format}`, `{example}`. */
+  invalidDate?: string;
+  /** Error for a typed date that is disabled or out of range. */
+  dateUnavailable?: string;
   pleaseSelectDate?: string;
+  /** Validation message for values before `min`. Placeholder: `{date}`. */
+  dateTooEarly?: string;
+  /** Validation message for values after `max`. Placeholder: `{date}`. */
+  dateTooLate?: string;
 }
 
 /** Override for `parseInput`'s segment-order auto detection. */
@@ -140,12 +179,17 @@ export declare class IntlDatepickerElement extends HTMLElement {
   // --- Public properties (read/write) ---
 
   value: string;
+  /** Picker type; reflects the `type` attribute. */
+  type: DatepickerType;
+  /** Form field name; reflects the `name` attribute. */
+  name: string | null;
   mapDays: MapDaysFn | null;
+  /** Range presets. A JSON string is also accepted. */
   presets: RangePreset[] | null;
   disabledDatesFilter: DisabledDatesFilterFn | null;
-  /** Alias for `disabledDatesFilter`. Will be removed in v0.2 — prefer `disabledDatesFilter`. */
+  /** @deprecated Alias for `disabledDatesFilter`. */
   isDateDisabled: DisabledDatesFilterFn | null;
-  /** Localized strings; setting merges with locale defaults per-key. */
+  /** Localized strings; setting merges with locale defaults per-key. A JSON string is also accepted. */
   labels: IntlDatepickerLabels;
   /** Override the locale's default numbering system (e.g., 'latn' for Latin digits). */
   numerals: string | null;
@@ -166,8 +210,6 @@ export declare class IntlDatepickerElement extends HTMLElement {
   // --- Form-associated ---
 
   readonly form: HTMLFormElement | null;
-  readonly name: string | null;
-  readonly type: string;
   readonly validity: ValidityState;
   readonly validationMessage: string;
   readonly willValidate: boolean;
@@ -177,7 +219,8 @@ export declare class IntlDatepickerElement extends HTMLElement {
   // --- Methods ---
 
   getValue(): SelectDetail | null;
-  setValue(isoDate: string): void;
+  /** Same formats as the `value` attribute. Fires `intl-change` only if the value changes. */
+  setValue(value: string): void;
   clear(): void;
   open(): void;
   close(): void;

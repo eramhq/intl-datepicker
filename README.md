@@ -6,20 +6,22 @@
 
 **[Live demo →](https://eramhq.github.io/intl-datepicker/)**  ·  [npm package](https://www.npmjs.com/package/intl-datepicker)
 
-> **Status: v0.1.x — usable and tested.** Per semver, breaking API changes
-> remain possible on minor bumps until 1.0. If you spot a rough edge, please
-> file an issue.
+> **Status: pre-1.0 — usable and tested.** Per semver, breaking API changes
+> remain possible on minor bumps until 1.0; each one is listed in the
+> [CHANGELOG](CHANGELOG.md). If you spot a rough edge, please file an issue.
 
 A framework-agnostic, multi-calendar datepicker Web Component powered by `Intl.DateTimeFormat`.
 
+- **No time-zone bugs** — values are plain ISO dates (`"2026-03-15"`) with no time or zone, so a date never shifts by a day between browser, server and database. [Details](#values--time-zones)
 - **14 calendar systems** — Gregorian, Persian, Islamic (3 variants), Hebrew, Buddhist, Japanese, Indian, Ethiopic, Coptic, ROC, and more
-- **Locale-aware formatting** — month/day names, number formatting, and RTL support driven by `Intl`
+- **Locale-aware** — month/day names, digits, first day of the week, weekend days and RTL all come from `Intl`; typed input accepts native digits (۱۴۰۳/۰۵/۱۲)
 - **Built-in label translations** for English (default), with opt-in entry points for Persian, Arabic, and Hebrew. Other locales fall back to English; supply your own via the `labels` API
 - **Multiple picker types** — date, range, week, multiple, month, year
-- **Zero-framework lock-in** — works with vanilla HTML, React, Vue, Svelte, or any framework
+- **Zero-framework lock-in** — works with vanilla HTML, React, Vue, Svelte, Angular
 - **SSR-safe** — importable in Node/Next.js without crashing; rendering is still client-only
-- **Form-associated** — participates in `<form>` submission, validation, and reset
-- **Accessible** — full keyboard navigation, ARIA roles, and `prefers-reduced-motion` support
+- **Form-associated** — participates in `<form>` submission, validation, reset and `<fieldset disabled>`
+- **Accessible** — WAI-ARIA grid with labelled column headers, live-region announcements, full keyboard support, `<label for>` support, forced-colors and reduced-motion support
+- **Never clipped** — the popup opens in the browser's top layer, above `overflow: hidden`, transforms, z-index stacks and modal `<dialog>`s
 
 ## Install
 
@@ -36,6 +38,17 @@ npm install intl-datepicker
 
 <intl-datepicker></intl-datepicker>
 ```
+
+### Without a bundler (CDN)
+
+```html
+<script type="module" src="https://esm.sh/intl-datepicker@0.3/full"></script>
+
+<intl-datepicker calendar="persian" locale="fa-IR"></intl-datepicker>
+```
+
+`/full` registers every calendar and label set in one module, which is the
+simplest choice from a CDN.
 
 ### Non-Gregorian Calendars
 
@@ -72,7 +85,66 @@ import 'intl-datepicker/labels/fa';
 ```
 
 For any locale without a built-in set (or to override individual strings),
-pass a `labels` object via the attribute or property API.
+pass a `labels` object via the attribute or property API:
+
+```html
+<intl-datepicker labels='{"today": "Now", "dateTooEarly": "Pick {date} or later"}'></intl-datepicker>
+```
+
+See `IntlDatepickerLabels` in the type declarations for every key. Keys with
+placeholders: `rangeSelected` (`{start}`, `{end}`), `formatHint` and
+`invalidDate` (`{format}`, `{example}`), `dateTooEarly`/`dateTooLate` (`{date}`).
+
+## Values & time zones
+
+The picker never deals in time zones. Every value is a calendar date with no
+time attached, written in ISO 8601 (Gregorian), whatever calendar the user sees:
+
+| `type` | Value | Example |
+|---|---|---|
+| `date` | `YYYY-MM-DD` | `2026-03-15` |
+| `range` | `start/end` | `2026-03-15/2026-03-20` |
+| `week` | ISO week | `2026-W11` |
+| `multiple` | comma-separated dates | `2026-03-15,2026-03-18` |
+| `month` | Gregorian: `YYYY-MM` · other calendars: see below | `2026-03` |
+| `year` | Gregorian: `YYYY` · other calendars: see below | `2026` |
+
+**What to store on the server:** the value string as-is, in a `DATE` column
+(or `daterange` for ranges). Don't convert it to a `Date`/timestamp — that
+is what introduces the off-by-one-day bugs. `valueAsDate` exists for
+convenience and returns local midnight.
+
+### Month and year values in non-Gregorian calendars
+
+A Persian, Hijri or Hebrew month doesn't line up with a Gregorian month, so
+`"2024-07"` can't name one. Month and year values follow the JavaScript
+standard [`Temporal.PlainYearMonth`](https://tc39.es/proposal-temporal/docs/plainyearmonth.html)
+format instead: the ISO date of the period's first day plus a calendar tag.
+
+```html
+<intl-datepicker type="month" calendar="persian" value="2024-07-22[u-ca=persian]"></intl-datepicker>
+```
+
+- The first 10 characters are a normal ISO date, so any backend can parse them.
+- `Temporal.PlainYearMonth.from(value)` gives you Mordad 1403 directly.
+- `type="year"` uses the first day of the year: `"2024-03-20[u-ca=persian]"` is 1403.
+- `value`, `min`, `max` and `setValue()` also accept any plain ISO date and
+  snap to the month (or year) containing it: `setValue('2024-08-10')` selects Mordad 1403.
+- The short `YYYY-MM` / `YYYY` forms are only accepted for `calendar="gregory"`.
+
+The `intl-change` detail (and `getValue()`) gives you all three shapes you
+are likely to need:
+
+```js
+{
+  type: 'month',
+  value: '2024-07-22[u-ca=persian]',
+  calendar: { year: 1403, month: 5 },   // native numbers, e.g. a payroll key
+  start: '2024-07-22',                   // Gregorian bounds, for range queries
+  end: '2024-08-21',
+  formatted: 'مرداد ۱۴۰۳',
+}
+```
 
 ## Picker Types
 
@@ -88,15 +160,15 @@ pass a `labels` object via the attribute or property API.
 <intl-datepicker type="range" min="2026-01-01" max="2026-12-31"></intl-datepicker>
 ```
 
-Value format: `YYYY-MM-DD/YYYY-MM-DD`
-
 ### Week Picker
 
 ```html
 <intl-datepicker type="week"></intl-datepicker>
 ```
 
-Value format: `YYYY-Www` (e.g. `2026-W14`)
+The value is the ISO week (Monday-based). The selection itself follows the
+locale's week, so `start`/`end` in the event detail are authoritative for
+Saturday- or Sunday-start locales.
 
 ### Multiple Dates
 
@@ -104,15 +176,11 @@ Value format: `YYYY-Www` (e.g. `2026-W14`)
 <intl-datepicker type="multiple" max-dates="5" sort-dates></intl-datepicker>
 ```
 
-Value format: comma-separated ISO dates
-
 ### Month Picker
 
 ```html
 <intl-datepicker type="month"></intl-datepicker>
 ```
-
-Value format: `YYYY-MM`
 
 ### Year Picker
 
@@ -120,18 +188,17 @@ Value format: `YYYY-MM`
 <intl-datepicker type="year"></intl-datepicker>
 ```
 
-Value format: `YYYY`
-
 ## Attributes
 
 | Attribute | Type | Description |
 |---|---|---|
 | `calendar` | `string` | Calendar system (see table below). Default: `"gregory"` |
-| `locale` | `string` | BCP 47 locale tag. Default: browser locale |
-| `value` | `string` | Initial value in ISO format |
+| `locale` | `string` | BCP 47 locale tag. Default: `<html lang>`, then the browser language |
+| `numerals` | `string` | Numbering system override, e.g. `latn` for 0–9 in `fa-IR`, `arab` for Arabic-Indic |
+| `value` | `string` | Initial value (see [Values & time zones](#values--time-zones)) |
 | `type` | `string` | Picker type: `date`, `range`, `week`, `multiple`, `month`, `year` |
-| `min` | `string` | Minimum selectable date (ISO) |
-| `max` | `string` | Maximum selectable date (ISO) |
+| `min` | `string` | Earliest selectable value, same format as `value` |
+| `max` | `string` | Latest selectable value, same format as `value` |
 | `for` | `string` | ID of an external `<input>` to bind to |
 | `placeholder` | `string` | Input placeholder text |
 | `name` | `string` | Form field name |
@@ -139,25 +206,29 @@ Value format: `YYYY`
 | `disabled` | `boolean` | Disable the picker |
 | `readonly` | `boolean` | Read-only input |
 | `required` | `boolean` | Mark as required for form validation |
-| `show-alternate` | `boolean` | Show Gregorian equivalent below the calendar |
+| `show-alternate` | `boolean` | Show the Gregorian equivalent below the calendar |
 | `disabled-dates` | `string` | JSON array of ISO dates to disable, e.g. `'["2026-01-01","2026-12-25"]'` |
-| `disable-weekends` | `boolean` | Disable Saturday and Sunday |
+| `disable-weekends` | `boolean` | Disable the locale's weekend days (Sat–Sun in `en-US`, Fri in `fa-IR`, Fri–Sat in `ar-SA`) |
 | `date-separator` | `string` | Separator for multiple date display. Default: `", "` |
 | `max-dates` | `number` | Max dates selectable in `multiple` mode |
 | `sort-dates` | `boolean` | Auto-sort selected dates in `multiple` mode |
 | `months` | `number` | Number of side-by-side month panels (1–3) |
 | `presets` | `string` | JSON array of range presets (see below) |
 | `no-animation` | `boolean` | Disable open/close animations |
-| `show-week-numbers` | `boolean` | Show ISO week numbers |
+| `show-week-numbers` | `boolean` | Show week numbers using the locale's week rules (first day and minimal days) |
 | `hide-outside-days` | `boolean` | Hide days from adjacent months |
-| `allow-input` | `boolean` | Allow typing dates directly into the input |
+| `fixed-weeks` | `boolean` | Always render six weeks so the height never changes |
+| `caption-layout` | `string` | Header layout: `button` (default), `dropdown`, `dropdown-months`, `dropdown-years` |
+| `allow-input` | `boolean` | Allow typing dates into the input (shows a format hint and inline errors) |
+| `date-format` | `string` | Segment order for typed input: `auto` (default, from the locale), `YMD`, `DMY`, `MDY` |
+| `labels` | `string` | JSON object overriding UI strings (see [Locale Labels](#locale-labels)) |
 
 ## Supported Calendars
 
 | `calendar` value | System |
 |---|---|
 | `gregory` | Gregorian (default) |
-| `persian` | Persian (Jalali) |
+| `persian` | Persian (Solar Hijri / Jalali) |
 | `islamic` | Islamic (Umm al-Qura) |
 | `islamic-umalqura` | Islamic (Umm al-Qura) |
 | `islamic-civil` | Islamic (Civil/Tabular) |
@@ -171,23 +242,30 @@ Value format: `YYYY`
 | `coptic` | Coptic |
 | `roc` | ROC (Minguo/Taiwan) |
 
+Persian leap years follow the astronomical calendar used in Iran (1403 is a
+leap year; Esfand 30, 1403 = 2025-03-20), not the 33-year arithmetic rule.
+
 ## Events
 
 | Event | `detail` | Description |
 |---|---|---|
-| `intl-select` | `SelectDetail` | Fired when a date is clicked |
-| `intl-change` | `SelectDetail` | Fired on any value change (select, clear, programmatic) |
+| `intl-select` | `SelectDetail` | Fired when the user picks a date (click, keyboard, Today, preset, typed input) |
+| `intl-change` | `SelectDetail` | Fired whenever the value changes, including `setValue()`/`clear()`. Setting the same value again does not fire |
 | `intl-navigate` | `{ year, month, direction }` | Fired when the user navigates months |
 | `intl-open` | — | Cancelable. Fired before popup opens |
 | `intl-close` | — | Cancelable. Fired before popup closes |
 
 ### SelectDetail Shape
 
-The `detail` shape depends on the picker type:
+The `detail` shape depends on the picker type. `{ year, month, day }` objects
+are in the active calendar; `value`, and `start`/`end` for month/year, are ISO.
 
 ```ts
-// type="date" | "month" | "year"
+// type="date"
 { type, value, calendar: { year, month, day }, formatted }
+
+// type="month" | "year"
+{ type, value, calendar: { year, month } | { year }, start: 'YYYY-MM-DD', end: 'YYYY-MM-DD', formatted }
 
 // type="range" | "week"
 { type, value, start: { year, month, day }, end: { year, month, day }, formatted }
@@ -202,8 +280,9 @@ The `detail` shape depends on the picker type:
 const picker = document.querySelector('intl-datepicker');
 
 // Properties
-picker.value;           // ISO string
-picker.valueAsDate;     // native Date or null
+picker.value;           // value string (see "Values & time zones")
+picker.type;            // 'date' | 'range' | … (reflects the attribute)
+picker.valueAsDate;     // native Date (local midnight) or null
 picker.displayValue;    // formatted display string
 picker.calendarValue;   // CalendarDate object
 picker.rangeStart;      // ISO string or null (range/week)
@@ -212,24 +291,24 @@ picker.selectedDates;   // CalendarDate[] (multiple)
 
 // Methods
 picker.getValue();              // full SelectDetail or null
-picker.setValue('2026-04-05');   // set value programmatically
+picker.setValue('2026-04-05');  // set value programmatically
 picker.clear();                 // clear selection
 picker.open();                  // open popup
 picker.close();                 // close popup
-picker.goToMonth(2026, 6);      // navigate to a specific month
+picker.goToMonth(2026, 6);      // navigate to a specific month (active calendar)
 
 // Callbacks (set via JS only)
 picker.mapDays = ({ date, isToday, isDisabled }) => {
   if (date.dayOfWeek === 5) return { className: 'friday', content: '🎉' };
 };
 
-picker.disabledDatesFilter = ({ year, month, day }) => {
+picker.disabledDatesFilter = ({ year, month, day, dayOfWeek }) => {
   return day === 13; // disable all 13ths
 };
-
-// Alias for disabledDatesFilter
-picker.isDateDisabled = (date) => date.day === 13;
 ```
+
+`presets` and `labels` accept either an array/object or the same JSON string
+as the attribute.
 
 ## Range Presets
 
@@ -239,16 +318,23 @@ picker.isDateDisabled = (date) => date.day === 13;
   presets='[
     {"label": "Last 7 days", "value": "-6d/today"},
     {"label": "This month", "value": "monthStart/monthEnd"},
-    {"label": "Last 30 days", "value": "-29d/today"}
+    {"label": "Last month", "value": "prevMonthStart/prevMonthEnd"},
+    {"label": "This year", "value": "yearStart/today"}
   ]'
 ></intl-datepicker>
 ```
 
-Preset `value` uses relative date expressions separated by `/`:
-- `today` — today's date
-- `-Nd` — N days ago
-- `+Nd` — N days from now
-- `monthStart` / `monthEnd` — start/end of current month
+Preset `value` is `start/end`, each one of:
+- `today`
+- `-Nd` / `+Nd` — N days before/after today
+- `monthStart` / `monthEnd` — this month
+- `prevMonthStart` / `prevMonthEnd` — last month
+- `yearStart` / `yearEnd` — this year
+- an ISO date, e.g. `2026-01-01`
+
+Months and years are computed **in the active calendar**: with
+`calendar="persian"`, "This month" is the current Persian month.
+Results are clamped to `min`/`max`.
 
 Presets can also be set via JavaScript:
 
@@ -265,18 +351,75 @@ picker.presets = [
 picker.mapDays = (info) => {
   // info: { date, isToday, isSelected, isDisabled, isInRange,
   //         isRangeStart, isRangeEnd, isCurrentMonth }
-  // date: { year, month, day, dayOfWeek }
+  // date: { year, month, day, dayOfWeek }  (active calendar)
 
   return {
-    className: 'my-class',  // extra CSS class
-    style: 'color: red',    // inline style
-    content: '<span>!</span>', // HTML appended inside cell
-    disabled: true,          // force-disable this day
-    hidden: true,            // hide this cell
-    title: 'Tooltip text',  // title attribute
+    className: 'my-class',     // extra CSS class
+    style: 'color: red',       // inline style
+    content: '<span>!</span>', // HTML appended inside the cell (trusted HTML only)
+    disabled: true,            // force-disable this day
+    hidden: true,              // hide this cell
+    title: 'Tooltip text',     // title attribute
   };
 };
 ```
+
+## Recipes
+
+### Hotel or rental booking
+
+```html
+<intl-datepicker type="range" name="stay" months="2" min="2026-10-01"
+  disabled-dates='["2026-12-24","2026-12-25"]' required></intl-datepicker>
+```
+
+Store `start` and `end` from the value (`"2026-10-03/2026-10-07"`) as two
+`DATE` columns. Nights = days between them; no time zone math involved.
+
+### Payroll month (Persian, Hijri, …)
+
+```html
+<intl-datepicker type="month" calendar="persian" locale="fa-IR" name="period"></intl-datepicker>
+```
+
+```js
+picker.addEventListener('intl-change', ({ detail }) => {
+  const key = `${detail.calendar.year}-${detail.calendar.month}`; // "1403-5"
+  fetch(`/payroll?from=${detail.start}&to=${detail.end}`);         // Gregorian bounds
+});
+```
+
+### Reports with presets
+
+```html
+<intl-datepicker type="range" calendar="persian" locale="fa-IR" max="2026-12-31"
+  presets='[{"label":"این ماه","value":"monthStart/today"},{"label":"ماه قبل","value":"prevMonthStart/prevMonthEnd"}]'>
+</intl-datepicker>
+```
+
+### Birth date
+
+Scrolling back decades in a calendar is slow. Let people type, and give them
+year and month dropdowns:
+
+```html
+<label for="dob">Date of birth</label>
+<intl-datepicker id="dob" name="dob" allow-input caption-layout="dropdown"
+  min="1900-01-01" max="2026-12-31" required></intl-datepicker>
+```
+
+`allow-input` shows the expected format under the field (e.g. `Format: MM/DD/YYYY`),
+accepts native digits and compact entry (`06171990`), and shows a persistent
+error for anything it can't read.
+
+### Hebrew and Gregorian on the same form
+
+```html
+<intl-datepicker calendar="hebrew" locale="he-IL" show-alternate></intl-datepicker>
+```
+
+The user picks in the Hebrew calendar and sees the Gregorian date underneath;
+the submitted value is still ISO.
 
 ## CSS Custom Properties
 
@@ -293,13 +436,17 @@ intl-datepicker {
   --idp-selected-text: #ffffff;
   --idp-today-border: var(--idp-primary);
   --idp-disabled: #9ca3af;
+  --idp-error: #dc2626;
   --idp-radius: 8px;
-  --idp-day-size: 40px;
+  --idp-day-size: 40px;           /* never rendered below 24px */
   --idp-font-size: 14px;
   --idp-font-family: system-ui, -apple-system, sans-serif;
   --idp-range-bg: #dbeafe;
   --idp-range-text: var(--idp-text);
   --idp-muted: #6b7280;
+  --idp-z-index: 1000;            /* only used without Popover API support */
+  --idp-input-min-width: 200px;
+  --idp-calendar-min-width: 300px;
 }
 ```
 
@@ -318,11 +465,15 @@ intl-datepicker::part(header) { background: #f0f0f0; }
 |---|---|
 | `input-wrapper` | Input container |
 | `input` | The `<input>` element |
-| `calendar` | Calendar popup panel |
+| `hint` | Format hint under the input (`allow-input`) |
+| `error` | Error message for unreadable typed input |
+| `calendar` | Calendar panel |
 | `header` | Month/year header bar |
 | `header-title` | Header title area |
 | `nav-prev` | Previous navigation button |
 | `nav-next` | Next navigation button |
+| `month-dropdown` | Month `<select>` (`caption-layout`) |
+| `year-dropdown` | Year `<select>` (`caption-layout`) |
 | `weekday` | Weekday column header |
 | `day` | Day cell button |
 | `month-cell` | Month cell (month picker view) |
@@ -332,6 +483,10 @@ intl-datepicker::part(header) { background: #f0f0f0; }
 | `clear-btn` | "Clear" button |
 | `alternate` | Gregorian alternate display |
 | `presets` | Presets sidebar |
+
+A [Custom Elements Manifest](https://github.com/webcomponents/custom-elements-manifest)
+ships at `dist/custom-elements.json` (linked from `package.json`), so editors
+and Storybook pick up attributes, events, parts and CSS properties.
 
 ## External Input Binding
 
@@ -346,38 +501,67 @@ Bind the picker to any existing input:
 
 ```html
 <form>
-  <intl-datepicker name="birthday" required min="1950-01-01" max="2010-12-31"></intl-datepicker>
+  <label for="birthday">Birthday</label>
+  <intl-datepicker id="birthday" name="birthday" required min="1950-01-01" max="2010-12-31"></intl-datepicker>
   <button type="submit">Submit</button>
 </form>
 ```
 
-The component participates in native form submission, validation (`required`, `min`/`max` range checks), and `form.reset()`.
+The component participates in native form submission, validation (`required`,
+`min`/`max`, unreadable typed input), `form.reset()`, and `<fieldset disabled>`.
+Validation messages come from the `labels` (`pleaseSelectDate`,
+`dateTooEarly`, `dateTooLate`) and are localized for fa, ar and he.
+
+## Accessibility
+
+- Each month is a `<table role="grid">` named by its month heading, with
+  `<th scope="col">` weekday headers that carry the full day name.
+- Today has `aria-current="date"`; selected days and range ends say so in their name.
+- Month changes from the navigation buttons and every selection are announced
+  through one polite live region.
+- A `<label for>` or `aria-label` on `<intl-datepicker>` names the inner input.
+- Navigation buttons at `min`/`max` stay focusable with `aria-disabled`.
+- Focus returns to the input when the popup closes.
+- Selected, today and focus states stay visible in Windows high-contrast
+  (`forced-colors`), and animations respect `prefers-reduced-motion`.
 
 ## Keyboard Navigation
 
-| Key | Action |
-|---|---|
-| `Arrow keys` | Move focus between days |
-| `Enter` | Select focused date |
-| `Escape` | Close the popup |
+| Key | Where | Action |
+|---|---|---|
+| `↓` / `Alt+↓` | Input | Open the calendar and focus the selected (or today's) date |
+| `Enter` | Input (`allow-input`) | Read the typed date |
+| `←` `→` | Days | Previous / next day (mirrored in RTL locales) |
+| `↑` `↓` | Days | Same day in the previous / next week |
+| `Home` / `End` | Days | First / last day of the week (locale's first day) |
+| `PageUp` / `PageDown` | Days | Previous / next month |
+| `Shift+PageUp` / `Shift+PageDown` | Days | Previous / next year |
+| `Enter` / `Space` | Days, months, years | Select |
+| Arrow keys | Month / year view | Move between cells |
+| `Escape` | Anywhere in the popup | Close (month/year view: back to days) and return focus to the input |
+| `Tab` | Popup | Cycle through the controls inside the popup |
 
-## React Wrapper
+Keyboard focus never moves outside `min`/`max`.
+
+## Frameworks
+
+### React
 
 ```jsx
 import IntlDatepicker from 'intl-datepicker/react';
 
 function App() {
   const ref = useRef(null);
+  const [value, setValue] = useState('2026-03-15');
 
   return (
     <IntlDatepicker
       ref={ref}
       calendar="persian"
       locale="fa-IR"
-      type="range"
-      inline
+      value={value}
+      onChange={(detail) => setValue(detail.value)}
       onSelect={(detail) => console.log(detail)}
-      onChange={(detail) => console.log(detail)}
       onNavigate={(detail) => console.log(detail)}
       onOpen={(e) => { /* return false to prevent */ }}
       onClose={(e) => { /* return false to prevent */ }}
@@ -386,11 +570,15 @@ function App() {
 }
 ```
 
-### Ref API
+Works with React 17–19. Attributes are passed at render time, so the first
+paint already uses the right calendar and locale. The built file starts with
+`'use client'`, so it can be imported from Next.js App Router server components.
+
+#### Ref API
 
 ```js
 ref.current.element;        // underlying HTMLElement
-ref.current.value;          // ISO string
+ref.current.value;          // value string
 ref.current.displayValue;   // formatted string
 ref.current.calendarValue;  // CalendarDate
 ref.current.selectedDates;  // CalendarDate[]
@@ -402,6 +590,52 @@ ref.current.close();
 ref.current.goToMonth(2026, 6);
 ```
 
+### Vue 3
+
+Tell Vue the tag is a custom element (in `vite.config.js`:
+`vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'intl-datepicker' } } })`), then:
+
+```vue
+<script setup>
+import 'intl-datepicker/full';
+import { ref } from 'vue';
+const date = ref('');
+</script>
+
+<template>
+  <intl-datepicker calendar="persian" locale="fa-IR"
+    :value="date" @intl-change="date = $event.detail.value" />
+</template>
+```
+
+### Svelte
+
+```svelte
+<script>
+  import 'intl-datepicker/full';
+  let date = '';
+</script>
+
+<intl-datepicker calendar="hebrew" locale="he-IL"
+  value={date} on:intl-change={(e) => (date = e.detail.value)} />
+```
+
+### Angular
+
+```ts
+import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import 'intl-datepicker/full';
+
+@Component({
+  selector: 'app-date',
+  standalone: true,
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  template: `<intl-datepicker calendar="islamic" locale="ar-SA"
+    [value]="date" (intl-change)="date = $any($event).detail.value"></intl-datepicker>`,
+})
+export class DateComponent { date = ''; }
+```
+
 ## TypeScript
 
 Type declarations are included. Imports:
@@ -411,11 +645,13 @@ import 'intl-datepicker';
 import type {
   IntlDatepickerElement,
   SelectDetail,
+  MonthDetail,
   NavigateDetail,
   DatepickerType,
   MapDaysFn,
   RangePreset,
   DisabledDatesFilterFn,
+  IntlDatepickerLabels,
 } from 'intl-datepicker';
 
 // React
@@ -425,10 +661,14 @@ import type { IntlDatepickerProps, IntlDatepickerRef } from 'intl-datepicker/rea
 
 ## Browser Support
 
-Any browser supporting Web Components, `Intl.DateTimeFormat`, and `adoptedStyleSheets`:
-- Chrome/Edge 73+
-- Firefox 101+
+Any browser supporting Web Components, form-associated custom elements and
+`Intl.DateTimeFormat` calendars:
+- Chrome/Edge 77+
+- Firefox 98+
 - Safari 16.4+
+
+The top-layer popup uses the Popover API (Chrome 114, Firefox 125, Safari 17);
+older browsers fall back to a fixed-position popup.
 
 ## License
 

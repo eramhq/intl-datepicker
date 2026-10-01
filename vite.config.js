@@ -56,6 +56,9 @@ function terserPlugin(terserOptions) {
             sourceMap: false,
           });
           if (result.code) chunk.code = result.code;
+          // Directives must be the first statement; terser drops unknown ones,
+          // so add it after minification. Next.js App Router needs it.
+          if (chunk.fileName === 'react/index.js') chunk.code = `'use client';\n${chunk.code}`;
         }),
       );
     },
@@ -92,7 +95,10 @@ export default defineConfig({
     rollupOptions: {
       external: ['@internationalized/date', 'react'],
     },
+    // JS is minified by the terser plugin below; `minify: false` would also
+    // turn off CSS minification for the `?inline` stylesheet, so keep it on.
     minify: false,
+    cssMinify: 'esbuild',
   },
   plugins: [
     copyDts(),
@@ -105,8 +111,36 @@ export default defineConfig({
     }),
   ],
   test: {
-    environment: 'jsdom',
-    include: ['src/**/*.test.js'],
-    setupFiles: ['src/test-setup.js'],
+    projects: [
+      {
+        test: {
+          name: 'unit',
+          environment: 'jsdom',
+          include: ['src/**/*.test.js'],
+          exclude: ['src/**/*.browser.test.js'],
+          setupFiles: ['src/test-setup.js'],
+        },
+      },
+      {
+        // Real engines for what jsdom can't model: layout, top layer, focus,
+        // form association, accessible names. `npx playwright install` first.
+        test: {
+          name: 'browser',
+          include: ['src/**/*.browser.test.js'],
+          setupFiles: ['src/test-setup.js'],
+          browser: {
+            enabled: true,
+            provider: 'playwright',
+            headless: true,
+            screenshotFailures: false,
+            instances: [
+              { browser: 'chromium' },
+              { browser: 'firefox' },
+              { browser: 'webkit' },
+            ],
+          },
+        },
+      },
+    ],
   },
 });

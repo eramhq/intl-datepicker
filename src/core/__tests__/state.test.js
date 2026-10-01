@@ -5,6 +5,7 @@ import {
   goToMonth, toISO, parseISOToCalendar, isDateDisabled,
   isInRange, isRangeEdge, getHoveredWeekBounds, getDayOfWeek, getWeekendDays,
   isoWeekToCalendarDate, parseTypedValue,
+  parseValueForType, serializeValueForType, getNavLimits,
 } from '../state.js';
 import { getCalendar } from '../locale.js';
 
@@ -641,5 +642,105 @@ describe('createState type-aware parsing (audit fix 2)', () => {
     const state = createState({ type: 'month', min: '2024-13', max: 'invalid' });
     expect(state.min).toBeNull();
     expect(state.max).toBeNull();
+  });
+});
+
+describe('Persian leap years (persian-datepicker #421 regression)', () => {
+  // The 33-year arithmetic rule gets 1403 wrong; the astronomical calendar
+  // used by Iran makes 1403 a leap year ending on Esfand 30 = 2025-03-20.
+  const persian = getCalendar('persian');
+
+  it('1403-12-30 exists and is 2025-03-20', () => {
+    const d = new CalendarDate(persian, 1403, 12, 30);
+    expect(d.day).toBe(30);
+    expect(toISO(d)).toBe('2025-03-20');
+  });
+
+  it('2025-03-21 is Nowruz 1404', () => {
+    const d = parseISOToCalendar('2025-03-21', persian);
+    expect([d.year, d.month, d.day]).toEqual([1404, 1, 1]);
+  });
+
+  it('1404 is not a leap year', () => {
+    expect(persian.getDaysInMonth(new CalendarDate(persian, 1404, 12, 1))).toBe(29);
+  });
+});
+
+describe('parseValueForType / serializeValueForType', () => {
+  const persian = getCalendar('persian');
+  const gregory = getCalendar('gregory');
+
+  it('round-trips every type in Gregorian', () => {
+    const cases = {
+      date: '2024-06-15',
+      range: '2024-06-10/2024-06-20',
+      multiple: '2024-06-10,2024-06-12',
+      week: '2024-W24',
+      month: '2024-06',
+      year: '2024',
+    };
+    for (const [type, value] of Object.entries(cases)) {
+      const state = createState({ type, value, locale: 'en-GB' });
+      expect(serializeValueForType(state), type).toBe(value);
+    }
+  });
+
+  it('orders a reversed range', () => {
+    const r = parseValueForType('2024-06-20/2024-06-10', 'range', gregory);
+    expect(toISO(r.rangeStart)).toBe('2024-06-10');
+    expect(toISO(r.rangeEnd)).toBe('2024-06-20');
+  });
+
+  it('keeps a range with only a start', () => {
+    const r = parseValueForType('2024-06-10', 'range', gregory);
+    expect(toISO(r.rangeStart)).toBe('2024-06-10');
+    expect(r.rangeEnd).toBeNull();
+  });
+
+  it('dedupes multiple dates and drops invalid ones', () => {
+    const r = parseValueForType('2024-06-10, 2024-06-10,nope', 'multiple', gregory);
+    expect(r.selectedDates.map(toISO)).toEqual(['2024-06-10']);
+  });
+
+  it('week accepts a plain date', () => {
+    const r = parseValueForType('2024-06-12', 'week', gregory, 'en-GB');
+    expect(toISO(r.rangeStart)).toBe('2024-06-10');
+  });
+
+  it('month accepts annotated and plain ISO dates, snapping to the native month', () => {
+    for (const v of ['2024-07-22[u-ca=persian]', '2024-07-30', '2024-08-21']) {
+      const { selectedDate } = parseValueForType(v, 'month', persian);
+      expect([selectedDate.year, selectedDate.month, selectedDate.day], v).toEqual([1403, 5, 1]);
+    }
+  });
+
+  it('returns null for invalid input', () => {
+    expect(parseValueForType('2024-13-01', 'date', gregory)).toBeNull();
+    expect(parseValueForType('2024-07', 'month', persian)).toBeNull();
+    expect(parseValueForType('2024-07-22[u-ca=bad cal]', 'month', persian)).toBeNull();
+  });
+
+  it('createState honours max-dates and sort-dates for initial values', () => {
+    const state = createState({ type: 'multiple', value: '2024-06-20,2024-06-10,2024-06-15', maxDates: 2, sortDates: true });
+    expect(serializeValueForType(state)).toBe('2024-06-10,2024-06-20');
+  });
+});
+
+describe('moveFocus clamps to min/max', () => {
+  it('does not move past min or max', () => {
+    let state = createState({ value: '2024-06-15', min: '2024-06-10', max: '2024-06-20' });
+    state = moveFocus(state, { months: -1 });
+    expect(toISO(state.focusedDate)).toBe('2024-06-10');
+    state = moveFocus(state, { days: 30 });
+    expect(toISO(state.focusedDate)).toBe('2024-06-20');
+  });
+});
+
+describe('getNavLimits', () => {
+  it('flags the months containing min and max', () => {
+    const state = createState({ value: '2024-06-15', min: '2024-06-10', max: '2024-08-20' });
+    expect(getNavLimits(state)).toEqual({ prev: true, next: false });
+    expect(getNavLimits(state, 3)).toEqual({ prev: true, next: true });
+    expect(getNavLimits(createState({ value: '2024-06-15' }))).toEqual({ prev: false, next: false });
   });
 });

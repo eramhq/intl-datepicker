@@ -16,7 +16,16 @@ export const LABELS_FA = Object.freeze({
   selectMonth: 'انتخاب ماه',
   selectYear: 'انتخاب سال',
   weekNumber: 'شماره هفته',
+  selected: 'انتخاب‌شده',
+  rangeStart: 'شروع بازه',
+  rangeEnd: 'پایان بازه',
+  rangeSelected: '{start} تا {end}',
+  formatHint: 'مثال: {example}',
+  invalidDate: 'تاریخ را مانند {example} وارد کنید',
+  dateUnavailable: 'این تاریخ قابل انتخاب نیست',
   pleaseSelectDate: 'لطفاً یک تاریخ انتخاب کنید',
+  dateTooEarly: 'تاریخ باید {date} یا بعد از آن باشد',
+  dateTooLate: 'تاریخ باید {date} یا قبل از آن باشد',
 });
 
 registerLabels('fa', LABELS_FA);

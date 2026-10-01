@@ -15,6 +15,7 @@
   --idp-range-bg: #dbeafe;
   --idp-range-text: var(--idp-text);
   --idp-muted: #6b7280;
+  --idp-error: #dc2626;
   --idp-z-index: 1000;
   --idp-input-min-width: 200px;
   --idp-calendar-min-width: 300px;
@@ -35,6 +36,10 @@
     --idp-range-bg: #1e3a5f;
     --idp-muted: #9ca3af;
   }
+}
+
+[hidden] {
+  display: none !important;
 }
 
 /* --- Shared resets --- */
@@ -83,7 +88,9 @@
 
 /* --- Input --- */
 .idp-input-wrapper {
-  display: inline-flex;
+  /* Block-level so the host's box ends at the input (no inline descender gap);
+     the popup is positioned against the host. */
+  display: flex;
   align-items: center;
   gap: 8px;
   border: 1px solid var(--idp-border);
@@ -102,10 +109,23 @@
 }
 
 .idp-input-wrapper:has(.idp-input[aria-invalid="true"]) {
-  border-color: #dc2626;
-  outline: 2px solid color-mix(in srgb, #dc2626 25%, transparent);
+  border-color: var(--idp-error);
+  outline: 2px solid color-mix(in srgb, var(--idp-error) 25%, transparent);
 }
 
+.idp-hint,
+.idp-error {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--idp-muted);
+}
+
+.idp-error {
+  color: var(--idp-error);
+}
+
+/* :disabled also matches when an ancestor <fieldset> is disabled */
+:host(:disabled) .idp-input-wrapper,
 :host([disabled]) .idp-input-wrapper {
   opacity: 0.5;
   cursor: not-allowed;
@@ -141,6 +161,9 @@
 
 .idp-clear-btn {
   flex-shrink: 0;
+  /* WCAG 2.5.8 minimum target size */
+  min-width: 24px;
+  min-height: 24px;
   padding: 2px;
   color: var(--idp-muted);
   border-radius: 50%;
@@ -156,10 +179,16 @@
 }
 
 /* --- Calendar Panel --- */
+/* Rendered in the top layer via popover="manual" where supported; the
+   resets below undo the UA popover styles (inset:0, margin:auto, Canvas colors). */
 .idp-calendar {
   position: fixed;
+  inset: auto;
   top: -9999px;
   left: -9999px;
+  margin: 0;
+  color: var(--idp-text);
+  font: inherit;
   background: var(--idp-bg);
   border: 1px solid var(--idp-border);
   border-radius: var(--idp-radius);
@@ -175,10 +204,6 @@
   position: static;
   box-shadow: none;
   overflow-y: visible;
-}
-
-.idp-calendar[hidden] {
-  display: none;
 }
 
 /* --- Header --- */
@@ -199,6 +224,12 @@
   justify-content: center;
   min-width: 36px;
   min-height: 36px;
+}
+
+.idp-nav-btn[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  background: none;
 }
 
 .idp-header-title {
@@ -301,35 +332,37 @@
   border-radius: var(--idp-radius);
 }
 
-/* --- Weekday Header --- */
-.idp-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  margin-bottom: 4px;
+/* --- Day Grid (table role="grid") --- */
+.idp-grid {
+  /* Not width:100% — inside the max-content panel, Blink sizes a
+     percentage-width table to "infinity". A percentage min-width adds nothing
+     to the intrinsic size but still stretches the table to fill the panel. */
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 1px;
+}
+
+.idp-grid th,
+.idp-grid td {
+  padding: 0;
+  text-align: center;
 }
 
 .idp-weekday {
-  text-align: center;
   font-size: 12px;
   font-weight: 500;
   color: var(--idp-muted);
-  padding: 4px 0;
+  padding: 4px 0 8px;
   user-select: none;
-}
-
-/* --- Day Grid --- */
-.idp-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
 }
 
 .idp-day {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--idp-day-size);
-  height: var(--idp-day-size);
+  /* Never below the WCAG 2.5.8 24px minimum target size */
+  width: max(24px, var(--idp-day-size));
+  height: max(24px, var(--idp-day-size));
   border-radius: 50%;
   position: relative;
   user-select: none;
@@ -499,15 +532,12 @@
 }
 
 /* --- Week numbers --- */
-.idp-week-number {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.idp-grid .idp-week-number {
   font-size: 11px;
+  font-weight: normal;
   color: var(--idp-muted);
   opacity: 0.6;
   user-select: none;
-  width: var(--idp-day-size);
 }
 
 .idp-week-number-header {
@@ -546,17 +576,40 @@
 }
 
 /* --- High contrast --- */
+/* Backgrounds are dropped in forced colors, so every state needs an outline
+   or border that survives. */
 @media (forced-colors: active) {
-  .idp-day.selected {
-    border: 2px solid ButtonText;
+  .idp-day.selected,
+  .idp-day.range-start,
+  .idp-day.range-end,
+  .idp-year-cell.selected,
+  .idp-month-cell.selected,
+  .idp-preset-btn.active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
   }
 
   .idp-day.today {
-    border: 2px solid Highlight;
+    border: 2px solid CanvasText;
   }
 
   .idp-day.in-range {
-    border: 1px solid Highlight;
+    border: 1px dashed Highlight;
+  }
+
+  .idp-day[aria-disabled="true"] {
+    color: GrayText;
+  }
+
+  .idp-day:focus-visible,
+  .idp-nav-btn:focus-visible,
+  .idp-header-btn:focus-visible,
+  .idp-footer-btn:focus-visible,
+  .idp-preset-btn:focus-visible,
+  .idp-year-cell:focus-visible,
+  .idp-month-cell:focus-visible {
+    outline: 3px solid CanvasText;
+    outline-offset: 2px;
   }
 
   .idp-calendar {
