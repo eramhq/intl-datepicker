@@ -16,7 +16,16 @@ export const LABELS_HE = Object.freeze({
   selectMonth: 'בחר חודש',
   selectYear: 'בחר שנה',
   weekNumber: 'מספר שבוע',
+  selected: 'נבחר',
+  rangeStart: 'תחילת הטווח',
+  rangeEnd: 'סוף הטווח',
+  rangeSelected: '{start} עד {end}',
+  formatHint: 'פורמט: {format}',
+  invalidDate: 'יש להזין תאריך כמו {example}',
+  dateUnavailable: 'תאריך זה אינו זמין',
   pleaseSelectDate: 'אנא בחר תאריך',
+  dateTooEarly: 'התאריך חייב להיות {date} או מאוחר יותר',
+  dateTooLate: 'התאריך חייב להיות {date} או מוקדם יותר',
 });
 
 registerLabels('he', LABELS_HE);

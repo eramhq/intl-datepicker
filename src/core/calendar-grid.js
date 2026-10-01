@@ -86,10 +86,10 @@ export function getMonthCount(calendar, year) {
 /**
  * Get month names for a calendar year in the given locale.
  */
-export function getMonthOptions(calendarId, year, locale, numerals = null) {
+export function getMonthOptions(calendarId, year, locale, numerals = null, fmt = null) {
   const calendar = typeof calendarId === 'string' ? getCalendar(calendarId) : calendarId;
   const count = getMonthCount(calendar, year);
-  const formatter = new Intl.DateTimeFormat(applyNumerals(locale, numerals), {
+  const formatter = fmt?.month || new Intl.DateTimeFormat(applyNumerals(locale, numerals), {
     month: 'long',
     calendar: resolveIntlCalendar(calendarId),
   });

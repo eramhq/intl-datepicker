@@ -1,7 +1,7 @@
-import { CalendarDate, toCalendar, today, isSameDay, startOfWeek, endOfWeek } from '@internationalized/date';
+import { CalendarDate, toCalendar, today, isSameDay, startOfWeek, endOfWeek, startOfMonth, startOfYear, endOfMonth, endOfYear } from '@internationalized/date';
 import { getCalendar } from './locale.js';
 import { resolveLabels } from './labels.js';
-import { getTimeZone, calendarDateToNative } from '../utils/common.js';
+import { getTimeZone, calendarDateToNative, resolveIntlCalendar } from '../utils/common.js';
 
 /**
  * Create initial state for the datepicker.
@@ -35,24 +35,13 @@ export function createState(options = {}) {
   let selectedDates = [];
 
   if (value) {
-    if (type === 'range' && value.includes('/')) {
-      const [startIso, endIso] = value.split('/');
-      rangeStart = parseISOToCalendar(startIso, calendar);
-      rangeEnd = parseISOToCalendar(endIso, calendar);
-    } else if (type === 'multiple' && value.includes(',')) {
-      selectedDates = value.split(',')
-        .map(s => parseISOToCalendar(s.trim(), calendar))
-        .filter(d => d !== null);
-    } else if (type === 'week') {
-      const mondayDate = parseTypedValue(value, 'week', calendar);
-      if (mondayDate) {
-        rangeStart = startOfWeek(mondayDate, locale);
-        rangeEnd = endOfWeek(mondayDate, locale);
+    const parsed = parseValueForType(value, type, calendar, locale);
+    if (parsed) {
+      ({ selectedDate, rangeStart, rangeEnd, selectedDates } = parsed);
+      if (type === 'multiple') {
+        if (maxDates) selectedDates = selectedDates.slice(0, maxDates);
+        if (sortDates) selectedDates.sort((a, b) => a.compare(b));
       }
-    } else if (type === 'month' || type === 'year') {
-      selectedDate = parseTypedValue(value, type, calendar);
-    } else {
-      selectedDate = parseISOToCalendar(value, calendar);
     }
   }
 
@@ -78,8 +67,8 @@ export function createState(options = {}) {
     viewMonth: focusDate.month,
     isOpen: inline,
     inline,
-    min: min ? parseTypedValue(min, type, calendar) : null,
-    max: max ? parseTypedValue(max, type, calendar) : null,
+    min: parseBound(min, type, calendar),
+    max: parseBound(max, type, calendar),
     hoveredDate: null,
     disabledDatesSet,
     disabledDatesFilter: disabledDatesFilter || null,
@@ -287,12 +276,27 @@ export function isRangeEdge(state, date, weekBounds) {
  * Navigate: move focus date by given delta.
  */
 export function moveFocus(state, delta) {
-  const newDate = state.focusedDate.add(delta);
+  let newDate = state.focusedDate.add(delta);
+  // Keep keyboard focus inside min/max so it never lands on an unreachable month.
+  if (state.min && newDate.compare(state.min) < 0) newDate = state.min;
+  if (state.max && newDate.compare(state.max) > 0) newDate = state.max;
   return updateState(state, {
     focusedDate: newDate,
     viewYear: newDate.year,
     viewMonth: newDate.month,
   });
+}
+
+/**
+ * Whether the visible months already touch min (prev) or max (next).
+ */
+export function getNavLimits(state, monthCount = 1) {
+  const first = new CalendarDate(state.calendar, state.viewYear, state.viewMonth, 1);
+  const last = first.add({ months: monthCount - 1 });
+  return {
+    prev: !!state.min && first.compare(startOfMonth(state.min)) <= 0,
+    next: !!state.max && last.compare(startOfMonth(state.max)) >= 0,
+  };
 }
 
 /**
@@ -365,9 +369,19 @@ export function isoWeekToCalendarDate(isoYear, weekNum, calendar) {
   }
 }
 
+// ISO date with an optional Temporal calendar annotation: "2024-07-22[u-ca=persian]".
+const ISO_DATE_RE = /^(\d{4}-\d{2}-\d{2})(?:\[u-ca=[a-z0-9-]+\])?$/;
+
+const pad = (n, len) => String(n).padStart(len, '0');
+
 /**
- * Parse a type-aware ISO value string to a CalendarDate in the given calendar.
- * Handles: YYYY-MM-DD (date), YYYY-Www (week), YYYY-MM (month), YYYY (year).
+ * Parse a type-aware value string to a CalendarDate in the given calendar.
+ * - week:  YYYY-Www → Monday of that ISO week
+ * - month: YYYY-MM (Gregorian only), or any ISO date (optionally `[u-ca=…]`-annotated) →
+ *          first day of the month containing it in `calendar`
+ * - year:  YYYY (Gregorian only), or any ISO date → first day of the year containing it
+ * - other: YYYY-MM-DD
+ * ISO strings are always Gregorian; month/year snapping happens in `calendar`.
  */
 export function parseTypedValue(value, type, calendar) {
   if (!value) return null;
@@ -378,34 +392,135 @@ export function parseTypedValue(value, type, calendar) {
     return isoWeekToCalendarDate(parseInt(match[1]), parseInt(match[2]), calendar);
   }
 
-  if (type === 'month') {
-    const match = value.match(/^(\d{4})-(\d{2})$/);
-    if (!match) return null;
-    const year = parseInt(match[1]);
-    const month = parseInt(match[2]);
-    if (year < 1 || month < 1 || month > 12) return null;
-    try {
-      const greg = new CalendarDate(year, month, 1);
-      return calendar ? toCalendar(greg, calendar) : greg;
-    } catch {
-      return null;
+  if (type === 'month' || type === 'year') {
+    let greg = null;
+    const short = value.match(type === 'month' ? /^(\d{4})-(\d{2})$/ : /^(\d{4})$/);
+    if (short) {
+      // The short form has no calendar tag, so it is only unambiguous for Gregorian.
+      if (calendar && calendar.identifier !== 'gregory') return null;
+      const year = parseInt(short[1]);
+      const month = type === 'month' ? parseInt(short[2]) : 1;
+      if (year < 1 || month < 1 || month > 12) return null;
+      greg = new CalendarDate(year, month, 1);
+    } else {
+      const iso = value.match(ISO_DATE_RE);
+      greg = iso && parseISOToCalendar(iso[1], getCalendar('gregory'));
     }
-  }
-
-  if (type === 'year') {
-    const match = value.match(/^\d{4}$/);
-    if (!match) return null;
-    const year = parseInt(value);
-    if (year < 1) return null;
-    try {
-      const greg = new CalendarDate(year, 1, 1);
-      return calendar ? toCalendar(greg, calendar) : greg;
-    } catch {
-      return null;
-    }
+    if (!greg) return null;
+    const native = calendar ? toCalendar(greg, calendar) : greg;
+    return type === 'month' ? startOfMonth(native) : startOfYear(native);
   }
 
   // Default: YYYY-MM-DD
   return parseISOToCalendar(value, calendar);
 }
 
+/**
+ * Parse a min/max bound. Week pickers also accept a plain ISO date.
+ */
+function parseBound(value, type, calendar) {
+  if (!value) return null;
+  if (type === 'week') return parseTypedValue(value, 'week', calendar) || parseISOToCalendar(value, calendar);
+  return parseTypedValue(value, type, calendar);
+}
+
+/**
+ * Parse a `value` string for the given picker type into selection fields.
+ * Returns null when the string isn't a valid value for that type.
+ * Disabled-date filtering is left to the caller.
+ */
+export function parseValueForType(value, type, calendar, locale) {
+  const empty = { selectedDate: null, rangeStart: null, rangeEnd: null, selectedDates: [] };
+  if (!value) return empty;
+
+  if (type === 'range') {
+    const [startIso, endIso] = value.split('/');
+    const start = parseISOToCalendar(startIso, calendar);
+    if (!start) return null;
+    if (endIso === undefined) return { ...empty, rangeStart: start };
+    const end = parseISOToCalendar(endIso, calendar);
+    if (!end) return null;
+    return start.compare(end) <= 0
+      ? { ...empty, rangeStart: start, rangeEnd: end }
+      : { ...empty, rangeStart: end, rangeEnd: start };
+  }
+
+  if (type === 'multiple') {
+    const dates = [];
+    for (const part of value.split(',')) {
+      const d = parseISOToCalendar(part.trim(), calendar);
+      if (d && !dates.some(x => isSameDay(x, d))) dates.push(d);
+    }
+    return dates.length ? { ...empty, selectedDates: dates } : null;
+  }
+
+  if (type === 'week') {
+    const date = parseBound(value, 'week', calendar);
+    if (!date) return null;
+    return { ...empty, rangeStart: startOfWeek(date, locale), rangeEnd: endOfWeek(date, locale) };
+  }
+
+  const date = parseTypedValue(value, type, calendar);
+  return date ? { ...empty, selectedDate: date } : null;
+}
+
+/**
+ * ISO 8601 week-year and week number (Monday-based, Gregorian).
+ * Late December / early January can shift year (Dec 29 → W01 of next year).
+ */
+export function getISOWeek(date) {
+  const native = calendarDateToNative(date);
+  const d = new Date(Date.UTC(native.getFullYear(), native.getMonth(), native.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return { year: d.getUTCFullYear(), week: Math.ceil(((d - yearStart) / 86400000 + 1) / 7) };
+}
+
+/**
+ * Gregorian start/end (as CalendarDates) of the month or year that `date`
+ * falls in, in its own calendar.
+ */
+export function getPeriodBounds(date, type) {
+  return type === 'year'
+    ? { start: startOfYear(date), end: endOfYear(date) }
+    : { start: startOfMonth(date), end: endOfMonth(date) };
+}
+
+/**
+ * Serialize the current selection to the `value` string for its picker type.
+ * Month/year values follow Temporal.PlainYearMonth: Gregorian stays
+ * "YYYY-MM"/"YYYY"; other calendars emit the ISO date of the period's first
+ * day plus a calendar annotation, e.g. "2024-07-22[u-ca=persian]".
+ */
+export function serializeValueForType(state) {
+  if (!state) return '';
+  const { type, selectedDate } = state;
+
+  if (type === 'range') {
+    const s = toISO(state.rangeStart);
+    const e = toISO(state.rangeEnd);
+    return s && e ? `${s}/${e}` : s;
+  }
+  if (type === 'multiple') {
+    return (state.selectedDates || []).map(toISO).join(',');
+  }
+  if (type === 'week') {
+    if (!state.rangeStart || !state.rangeEnd) return '';
+    // Mid-week day: the locale week may start on Sat/Sun, which belong to the
+    // previous ISO week. rangeStart + 3 is always inside the ISO week that
+    // parses back to this same locale week.
+    const { year, week } = getISOWeek(state.rangeStart.add({ days: 3 }));
+    return `${year}-W${pad(week, 2)}`;
+  }
+  if ((type === 'month' || type === 'year') && selectedDate) {
+    if (state.calendarId === 'gregory') {
+      return type === 'month'
+        ? `${pad(selectedDate.year, 4)}-${pad(selectedDate.month, 2)}`
+        : pad(selectedDate.year, 4);
+    }
+    const { start } = getPeriodBounds(selectedDate, type);
+    return `${toISO(start)}[u-ca=${resolveIntlCalendar(state.calendarId)}]`;
+  }
+  return toISO(selectedDate);
+}

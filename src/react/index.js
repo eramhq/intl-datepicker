@@ -1,3 +1,5 @@
+// The built file gets a 'use client' banner (added in vite.config.js after
+// minification) so Next.js App Router treats it as a Client Component.
 import { createElement, forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 // Ensure the web component is registered
@@ -50,6 +52,9 @@ function toCamel(s) {
 
 const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
   const elRef = useRef(null);
+  // Last values assigned to JS-only properties. Getters can't be compared
+  // (labels returns the resolved set), and re-assigning re-renders the panel.
+  const assignedRef = useRef({});
 
   useImperativeHandle(ref, () => ({
     get element() { return elRef.current; },
@@ -107,10 +112,12 @@ const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
 
   // Bucket each prop into one of: HTML attribute, JS-only property, or
   // standard DOM prop forwarded through createElement (className, style, id,
-  // aria-*, data-*, children).
-  const attrPairs = {};
+  // aria-*, data-*, children). Attributes go straight into createElement so
+  // the element connects with the right calendar/locale/type on first paint.
+  // React 18 sets them as attributes; React 19 assigns the ones the element
+  // exposes as properties (value, type, name, numerals), which it handles.
+  const elementProps = { ref: elRef };
   const propPairs = {};
-  const domProps = { ref: elRef };
   const { children } = props;
 
   for (const key of Object.keys(props)) {
@@ -125,8 +132,9 @@ const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
     }
 
     if (key in DUAL_PROPS) {
+      // JSON strings are plain attributes; objects/arrays need the setter.
       if (DUAL_PROPS[key](val)) propPairs[key] = val;
-      else if (typeof val === 'string' && val.length > 0) attrPairs[key] = val;
+      else if (typeof val === 'string' && val.length > 0) elementProps[key] = val;
       else if (val == null) propPairs[key] = null;
       continue;
     }
@@ -134,38 +142,29 @@ const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
     const attrName = CAMEL_TO_ATTR.get(key);
     if (attrName) {
       if (BOOLEAN_ATTRS.includes(attrName)) {
-        if (val) attrPairs[attrName] = '';
+        // Never pass `false`: React 18 would write the string "false".
+        if (val) elementProps[attrName] = '';
       } else if (val !== undefined && val !== null && val !== false) {
-        attrPairs[attrName] = String(val);
+        elementProps[attrName] = String(val);
       }
       continue;
     }
 
-    domProps[key] = val;
+    elementProps[key] = val;
   }
 
   useEffect(() => {
     const el = elRef.current;
     if (!el) return;
-    for (const [name, value] of Object.entries(attrPairs)) {
-      if (el.getAttribute(name) !== value) el.setAttribute(name, value);
-    }
-    for (const attr of [...STRING_ATTRS, ...BOOLEAN_ATTRS, 'presets', 'labels']) {
-      if (!(attr in attrPairs) && el.hasAttribute(attr)) {
-        el.removeAttribute(attr);
-      }
-    }
-  });
-
-  useEffect(() => {
-    const el = elRef.current;
-    if (!el) return;
+    const assigned = assignedRef.current;
     for (const [name, value] of Object.entries(propPairs)) {
-      if (el[name] !== value) el[name] = value;
+      if (name in assigned && assigned[name] === value) continue;
+      assigned[name] = value;
+      el[name] = value;
     }
   });
 
-  return createElement('intl-datepicker', domProps, children);
+  return createElement('intl-datepicker', elementProps, children);
 });
 
 IntlDatepicker.displayName = 'IntlDatepicker';

@@ -61,7 +61,7 @@ export interface IntlDatepickerProps extends React.HTMLAttributes<IntlDatepicker
   // JS-only properties (passed via property setter, not attribute)
   mapDays?: MapDaysFn | null;
   disabledDatesFilter?: DisabledDatesFilterFn | null;
-  /** Alias for `disabledDatesFilter`. Will be removed in v0.2 — prefer `disabledDatesFilter`. */
+  /** @deprecated Alias for `disabledDatesFilter`. */
   isDateDisabled?: DisabledDatesFilterFn | null;
 
   // Event handlers

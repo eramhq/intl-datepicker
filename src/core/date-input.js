@@ -128,7 +128,18 @@ export function parseInput(text, calendarId, locale, format) {
   // Strip Japanese era prefix (令和 etc.) and any other leading non-digits.
   const stripped = normalized.replace(/^[^0-9]+/, '');
 
-  const segments = stripped.split(SEPARATOR_REGEX).filter(Boolean);
+  let order = (format && format !== 'auto') ? format : getLocaleSegmentOrder(locale, calendarId);
+  if (!['YMD', 'DMY', 'MDY'].includes(order)) order = 'YMD';
+
+  let segments = stripped.split(SEPARATOR_REGEX).filter(Boolean);
+  // Compact entry without separators ("20240617", "17062024") — numeric
+  // keypads on phones have no "/" key. Split by the locale's segment order.
+  if (segments.length === 1 && /^\d{8}$/.test(segments[0])) {
+    const s = segments[0];
+    segments = order === 'YMD'
+      ? [s.slice(0, 4), s.slice(4, 6), s.slice(6)]
+      : [s.slice(0, 2), s.slice(2, 4), s.slice(4)];
+  }
   if (segments.length !== 3) return null;
   if (!segments.every(s => /^\d+$/.test(s))) return null;
 
@@ -141,9 +152,6 @@ export function parseInput(text, calendarId, locale, format) {
 
   // Prefer width-based year detection so "1403/01/01" works regardless of locale.
   const yearIdx = widths.findIndex(w => w >= 3);
-
-  let order = (format && format !== 'auto') ? format : getLocaleSegmentOrder(locale, calendarId);
-  if (!['YMD', 'DMY', 'MDY'].includes(order)) order = 'YMD';
 
   let year, month, day;
   if (yearIdx === 0 || (yearIdx === -1 && order === 'YMD')) {

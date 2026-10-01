@@ -25,8 +25,21 @@ export const DEFAULT_LABELS_EN = Object.freeze({
   selectMonth: 'Select month',
   selectYear: 'Select year',
   weekNumber: 'Week number',
-  // Validation
+  // Day cell state, appended to the day's accessible name
+  selected: 'selected',
+  rangeStart: 'range start',
+  rangeEnd: 'range end',
+  // Live-region announcement for a completed range or week
+  rangeSelected: '{start} to {end}',
+  // Typed input (allow-input). {format} is a pattern like "MM/DD/YYYY";
+  // {example} is a sample date in the active calendar and numerals.
+  formatHint: 'Format: {format}',
+  invalidDate: 'Enter a date like {example}',
+  dateUnavailable: 'This date is not available',
+  // Validation. {date} is the formatted min/max.
   pleaseSelectDate: 'Please select a date',
+  dateTooEarly: 'Date must be {date} or later',
+  dateTooLate: 'Date must be {date} or earlier',
 });
 
 const labelRegistry = new Map();
@@ -50,4 +63,11 @@ export function resolveLabels(locale, userOverrides) {
     }
   }
   return merged;
+}
+
+/**
+ * Replace `{name}` placeholders in a label with values.
+ */
+export function fillLabel(label, values) {
+  return label.replace(/\{(\w+)\}/g, (m, key) => (key in values ? values[key] : m));
 }

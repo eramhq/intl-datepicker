@@ -156,3 +156,18 @@ describe('parseInput — round-trip with formatDateShort', () => {
     expect(parsed.day).toBe(15);
   });
 });
+
+describe('compact digit entry', () => {
+  it('splits 8 digits by the locale order', () => {
+    const us = parseInput('06172024', 'gregory', 'en-US');
+    expect([us.year, us.month, us.day]).toEqual([2024, 6, 17]);
+    const gb = parseInput('17062024', 'gregory', 'en-GB');
+    expect([gb.year, gb.month, gb.day]).toEqual([2024, 6, 17]);
+    const fa = parseInput('۱۴۰۳۰۵۱۲', 'persian', 'fa-IR');
+    expect([fa.year, fa.month, fa.day]).toEqual([1403, 5, 12]);
+  });
+
+  it('rejects other digit counts', () => {
+    expect(parseInput('0617202', 'gregory', 'en-US')).toBeNull();
+  });
+});

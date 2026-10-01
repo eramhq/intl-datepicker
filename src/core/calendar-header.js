@@ -2,9 +2,11 @@ import { chevronLeft, chevronRight, chevronDown } from '../styles.js';
 import { formatMonthYear } from '../utils/format.js';
 import { escAttr } from '../utils/common.js';
 import { applyNumerals } from './locale.js';
-import { getMonthOptions, getMonthCount } from './calendar-grid.js';
+import { getMonthOptions } from './calendar-grid.js';
+import { getNavLimits } from './state.js';
 
 function getYearFormatter(state) {
+  if (state._fmt) return state._fmt.number;
   try {
     return new Intl.NumberFormat(applyNumerals(state.locale, state.numerals), { useGrouping: false });
   } catch { return null; }
@@ -42,10 +44,22 @@ function renderYearDropdown(state, yearFmt) {
 }
 
 /**
+ * Previous/next month buttons. At the min/max limit they stay focusable but
+ * get `aria-disabled`, so keyboard focus isn't lost when the limit is hit.
+ */
+export function renderNavButton(dir, state, disabled) {
+  const isPrev = dir === 'prev';
+  const arrow = isPrev === !state._isRTL ? chevronLeft : chevronRight;
+  const label = isPrev ? state.labels.previousMonth : state.labels.nextMonth;
+  return `<button class="idp-nav-btn" part="nav-${dir}" data-action="${dir}-month" aria-label="${escAttr(label)}" type="button"${disabled ? ' aria-disabled="true"' : ''}>${arrow}</button>`;
+}
+
+/**
  * Render the calendar header with month/year navigation.
+ * `titleId` is the id the day grid's `aria-labelledby` points at.
  * Returns HTML string.
  */
-export function renderHeader(state, view, captionLayout = 'button') {
+export function renderHeader(state, view, captionLayout = 'button', titleId = 'idp-title-0') {
   const { viewYear, viewMonth, locale, calendarId, labels } = state;
   const isRTL = state._isRTL;
   const prevArrow = isRTL ? chevronRight : chevronLeft;
@@ -62,50 +76,46 @@ export function renderHeader(state, view, captionLayout = 'button') {
   // Dropdown caption layouts
   if (captionLayout !== 'button') {
     const yearFmt = getYearFormatter(state);
-    const months = getMonthOptions(state.calendarId, state.viewYear, state.locale, state.numerals);
-    let titleContent = '';
+    const months = getMonthOptions(state.calendarId, state.viewYear, state.locale, state.numerals, state._fmt);
+    const limits = getNavLimits(state);
+    const title = formatMonthYear(viewYear, viewMonth, locale, calendarId, state.numerals, state._fmt);
+    let titleContent = `<span class="idp-sr-only" id="${titleId}">${title}</span>`;
 
     if (captionLayout === 'dropdown') {
-      titleContent = renderMonthDropdown(state, months) + renderYearDropdown(state, yearFmt);
+      titleContent += renderMonthDropdown(state, months) + renderYearDropdown(state, yearFmt);
     } else if (captionLayout === 'dropdown-months') {
-      titleContent = renderMonthDropdown(state, months) +
+      titleContent += renderMonthDropdown(state, months) +
         `<button class="idp-header-btn" data-action="show-years" type="button" aria-label="${escAttr(labels.selectYear)}">${formatYearNum(viewYear, yearFmt)} ${chevronDown}</button>`;
     } else if (captionLayout === 'dropdown-years') {
       const currentMonthName = months.find(m => m.value === viewMonth)?.label || '';
-      titleContent = `<button class="idp-header-btn" data-action="show-months" type="button" aria-label="${escAttr(labels.selectMonth)}">${escAttr(currentMonthName)}</button>` +
+      titleContent += `<button class="idp-header-btn" data-action="show-months" type="button" aria-label="${escAttr(labels.selectMonth)}">${escAttr(currentMonthName)}</button>` +
         renderYearDropdown(state, yearFmt);
     }
 
     return `
       <div class="idp-header" part="header" role="group" aria-label="${escAttr(labels.calendarNavigation)}">
-        <button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="${escAttr(labels.previousMonth)}" type="button">
-          ${prevArrow}
-        </button>
+        ${renderNavButton('prev', state, limits.prev)}
         <div class="idp-header-title idp-header-dropdowns" part="header-title">
           ${titleContent}
         </div>
-        <button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="${escAttr(labels.nextMonth)}" type="button">
-          ${nextArrow}
-        </button>
+        ${renderNavButton('next', state, limits.next)}
       </div>
     `;
   }
 
-  const headerTitle = formatMonthYear(viewYear, viewMonth, locale, calendarId, state.numerals);
+  const headerTitle = formatMonthYear(viewYear, viewMonth, locale, calendarId, state.numerals, state._fmt);
+  const limits = getNavLimits(state);
 
+  // The button's name keeps the visible month text (WCAG 2.5.3 label-in-name).
   return `
     <div class="idp-header" part="header" role="group" aria-label="${escAttr(labels.calendarNavigation)}">
-      <button class="idp-nav-btn" part="nav-prev" data-action="prev-month" aria-label="${escAttr(labels.previousMonth)}" type="button">
-        ${prevArrow}
-      </button>
+      ${renderNavButton('prev', state, limits.prev)}
       <div class="idp-header-title" part="header-title">
-        <button class="idp-header-btn" data-action="show-months" type="button" aria-label="${escAttr(labels.selectMonth)}">
-          ${headerTitle} ${chevronDown}
+        <button class="idp-header-btn" data-action="show-months" type="button" aria-label="${escAttr(`${headerTitle}, ${labels.selectMonth}`)}">
+          <span id="${titleId}">${headerTitle}</span> ${chevronDown}
         </button>
       </div>
-      <button class="idp-nav-btn" part="nav-next" data-action="next-month" aria-label="${escAttr(labels.nextMonth)}" type="button">
-        ${nextArrow}
-      </button>
+      ${renderNavButton('next', state, limits.next)}
     </div>
   `;
 }
@@ -153,7 +163,7 @@ function renderMonthViewHeader(state) {
 export function renderYearGrid(state) {
   const decadeStart = Math.floor(state.viewYear / 20) * 20;
   const yearFmt = getYearFormatter(state);
-  let html = `<div class="idp-year-grid" role="grid" aria-label="${escAttr(state.labels.yearSelection)}">`;
+  let html = `<div class="idp-year-grid" role="group" aria-label="${escAttr(state.labels.yearSelection)}">`;
 
   for (let y = decadeStart; y < decadeStart + 20; y++) {
     const isCurrent = y === state.viewYear;
@@ -161,8 +171,8 @@ export function renderYearGrid(state) {
     const classes = ['idp-year-cell'];
     if (isCurrent) classes.push('selected');
 
-    html += `<button class="${classes.join(' ')}" part="year-cell" data-action="select-year" data-year="${y}" type="button" role="gridcell"
-      ${isCurrent ? 'aria-selected="true"' : ''}
+    html += `<button class="${classes.join(' ')}" part="year-cell" data-action="select-year" data-year="${y}" type="button"
+      ${isCurrent ? 'aria-current="true"' : ''}
       ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${formatYearNum(y, yearFmt)}</button>`;
   }
 
@@ -174,8 +184,8 @@ export function renderYearGrid(state) {
  * Render a grid of months for the month picker view.
  */
 export function renderMonthGrid(state) {
-  const months = getMonthOptions(state.calendarId, state.viewYear, state.locale, state.numerals);
-  let html = `<div class="idp-month-grid" role="grid" aria-label="${escAttr(state.labels.monthSelection)}">`;
+  const months = getMonthOptions(state.calendarId, state.viewYear, state.locale, state.numerals, state._fmt);
+  let html = `<div class="idp-month-grid" role="group" aria-label="${escAttr(state.labels.monthSelection)}">`;
 
   for (const month of months) {
     const isCurrent = month.value === state.viewMonth;
@@ -185,8 +195,8 @@ export function renderMonthGrid(state) {
     const classes = ['idp-month-cell'];
     if (isCurrent) classes.push('selected');
 
-    html += `<button class="${classes.join(' ')}" part="month-cell" data-action="select-month" data-month="${month.value}" type="button" role="gridcell"
-      ${isCurrent ? 'aria-selected="true"' : ''}
+    html += `<button class="${classes.join(' ')}" part="month-cell" data-action="select-month" data-month="${month.value}" type="button"
+      ${isCurrent ? 'aria-current="true"' : ''}
       ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${month.label}</button>`;
   }
 

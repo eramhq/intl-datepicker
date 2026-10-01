@@ -19,7 +19,7 @@ describe('renderYearGrid with min/max', () => {
     state.viewYear = 2020;
     const html = renderYearGrid(state);
     // 2020 decade: years 2020-2039. Min year is 2024, so 2020-2023 should be disabled
-    expect(html).toContain('data-year="2023" type="button" role="gridcell"');
+    expect(html).toContain('data-year="2023" type="button"');
     expect(html).toMatch(/data-year="2023"[^>]*aria-disabled="true"/);
     expect(html).toMatch(/data-year="2020"[^>]*aria-disabled="true"/);
     // 2024 should NOT be disabled

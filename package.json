@@ -1,11 +1,12 @@
 {
   "name": "intl-datepicker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Framework-agnostic multi-calendar datepicker Web Component powered by Intl.DateTimeFormat",
   "type": "module",
   "main": "dist/intl-datepicker.js",
   "module": "dist/intl-datepicker.js",
   "types": "dist/intl-datepicker.d.ts",
+  "customElements": "dist/custom-elements.json",
   "exports": {
     ".": {
       "types": "./dist/intl-datepicker.d.ts",
@@ -83,17 +84,25 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && cem analyze",
     "build:demo": "vite build --config vite.demo.config.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prepublishOnly": "npm test && npm run build"
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "prepublishOnly": "npm test && npm run build",
+    "test:browser": "vitest run --project browser",
+    "analyze": "cem analyze"
   },
   "dependencies": {
     "@internationalized/date": "^3.12.0"
   },
   "devDependencies": {
+    "@custom-elements-manifest/analyzer": "^0.11.0",
+    "@js-temporal/polyfill": "^0.5.1",
+    "@vitest/browser": "^3.2.4",
     "jsdom": "^26.1.0",
+    "playwright": "^1.63.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "terser": "^5.46.2",
     "vite": "^6.3.1",
     "vitest": "^3.1.1"

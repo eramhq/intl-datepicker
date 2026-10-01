@@ -315,6 +315,24 @@
       background: var(--card-bg);
       color: var(--text);
     }
+    .demo-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      font: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    #dialogDemo {
+      margin: auto;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      max-width: 360px;
+    }
+    #dialogDemo::backdrop { background: rgb(0 0 0 / 0.35); }
 
     /* ── Footer ── */
     footer {
@@ -439,6 +457,7 @@
           <div class="toc-group">
             <div class="toc-group-title">Input &amp; States</div>
             <a href="#sec-input">Direct Input</a>
+            <a href="#sec-dialog">Popup in a Dialog</a>
             <a href="#sec-states">States</a>
           </div>
         </div>
@@ -606,7 +625,10 @@
       <!-- 7. Month & Year -->
       <section id="sec-month-year" class="demo-section" data-output>
         <h2>Month &amp; Year Picker</h2>
-        <p>Select just a month or just a year.</p>
+        <p>Select just a month or just a year. Gregorian values are <code>YYYY-MM</code> / <code>YYYY</code>.
+          In other calendars a month doesn't line up with a Gregorian one, so the value follows
+          <code>Temporal.PlainYearMonth</code>: the ISO date of the period's first day plus a calendar tag,
+          e.g. <code>2024-07-22[u-ca=persian]</code>. The event also gives the native numbers and the Gregorian start/end.</p>
         <div class="attr-list">
           <span class="attr-tag">type="month"</span>
           <span class="attr-tag">type="year"</span>
@@ -625,6 +647,8 @@
         <div class="demo-row">
           <intl-datepicker id="demo-month" type="month" calendar="gregory" locale="en-US" placeholder="Select month..."></intl-datepicker>
           <intl-datepicker id="demo-year" type="year" calendar="gregory" locale="en-US" placeholder="Select year..."></intl-datepicker>
+          <intl-datepicker id="demo-month-fa" type="month" calendar="persian" locale="fa-IR" placeholder="ماه (شمسی)"></intl-datepicker>
+          <intl-datepicker id="demo-year-fa" type="year" calendar="persian" locale="fa-IR" placeholder="سال (شمسی)"></intl-datepicker>
         </div>
         <div class="output">No selection</div>
       </section>
@@ -934,7 +958,9 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
       <!-- 15. Direct Input -->
       <section id="sec-input" class="demo-section" data-output>
         <h2>Allow Direct Input</h2>
-        <p>Type a date directly into the input field (YYYY-MM-DD or locale format).</p>
+        <p>Type a date in the locale's order. A hint shows the expected format, native digits
+          (۱۴۰۳/۰۵/۱۲) and compact entry without separators (<code>06172024</code>) work, and anything
+          unreadable gets a persistent error and marks the form field invalid. Press <kbd>Enter</kbd> or leave the field to commit.</p>
         <div class="attr-list">
           <span class="attr-tag">allow-input</span>
         </div>
@@ -945,11 +971,38 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
   placeholder="Type a date..."&gt;
 &lt;/intl-datepicker&gt;</code></pre>
         </div>
-        <intl-datepicker id="demo-input" calendar="gregory" locale="en-US" placeholder="Type a date..." allow-input></intl-datepicker>
+        <div class="demo-row">
+          <intl-datepicker id="demo-input" calendar="gregory" locale="en-US" placeholder="Type a date..." allow-input></intl-datepicker>
+          <intl-datepicker id="demo-input-fa" calendar="persian" locale="fa-IR" placeholder="تاریخ را تایپ کنید" allow-input></intl-datepicker>
+        </div>
         <div class="output">No date selected</div>
       </section>
 
-      <!-- 16. States -->
+      <!-- 16. Popup in a dialog -->
+      <section id="sec-dialog" class="demo-section">
+        <h2>Popup in a Dialog</h2>
+        <p>The calendar opens in the browser's top layer (Popover API), so a modal <code>&lt;dialog&gt;</code>,
+          <code>overflow: hidden</code>, a transformed parent or a z-index stack can't clip or misplace it.</p>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;dialog style="overflow: hidden"&gt;
+  &lt;div style="transform: scale(1)"&gt;
+    &lt;intl-datepicker&gt;&lt;/intl-datepicker&gt;
+  &lt;/div&gt;
+&lt;/dialog&gt;</code></pre>
+        </div>
+        <button type="button" class="demo-btn" id="openDialogDemo">Open dialog</button>
+        <dialog id="dialogDemo" style="overflow:hidden;border-radius:12px;padding:20px">
+          <div style="transform:scale(1)">
+            <p style="margin-top:0">Pick a date — the calendar overflows the dialog without being clipped.</p>
+            <intl-datepicker calendar="gregory" locale="en-US" placeholder="Pick a date..."></intl-datepicker>
+            <p><button type="button" class="demo-btn" id="closeDialogDemo">Close</button></p>
+          </div>
+        </dialog>
+      </section>
+
+      <!-- 17. States -->
       <section id="sec-states" class="demo-section">
         <h2>States: Pre-populated, Disabled &amp; Readonly</h2>
         <p>Datepickers with pre-set values, disabled state, and readonly state.</p>
@@ -1023,6 +1076,10 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
         const n = detail.dates.length;
         lines.push(`Count:     ${n} date${n !== 1 ? 's' : ''}`);
         lines.push(`Value:     ${detail.value}`);
+      } else if (detail.type === 'month' || detail.type === 'year') {
+        lines.push(`Value:     ${detail.value}`);
+        lines.push(`Native:    ${JSON.stringify(detail.calendar)}`);
+        lines.push(`ISO span:  ${detail.start} → ${detail.end}`);
       } else {
         lines.push(`Value:     ${detail.value}`);
       }
@@ -1059,6 +1116,11 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
     }
     globalCal.addEventListener('change', applyGlobal);
     globalLocale.addEventListener('change', applyGlobal);
+
+    // ── Dialog demo ────────────────────────────────────────────────
+    const dialogDemo = document.getElementById('dialogDemo');
+    document.getElementById('openDialogDemo').addEventListener('click', () => dialogDemo.showModal());
+    document.getElementById('closeDialogDemo').addEventListener('click', () => dialogDemo.close());
 
     // ── Copy buttons ───────────────────────────────────────────────
     document.querySelectorAll('.copy-btn').forEach(btn => {
