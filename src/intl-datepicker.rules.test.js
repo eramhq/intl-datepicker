@@ -245,9 +245,24 @@ describe('first-day-of-week in the component', () => {
     expect(el.shadowRoot.activeElement.dataset.iso).toBe('2026-10-12');
     press(el, 'End');
     expect(el.shadowRoot.activeElement.dataset.iso).toBe('2026-10-18');
-    // en-US minimalDays is 1: the week of Oct 12 is week 42 with Monday starts.
-    const row = day(el, '2026-10-12').closest('tr');
-    expect(row.querySelector('.idp-week-number').textContent).toBe('42');
+    const weekOf = (iso) => day(el, iso).closest('tr').querySelector('.idp-week-number').textContent;
+    expect(weekOf('2026-10-12')).toBe(weekOf('2026-10-18'));
+  });
+
+  it('numbers weeks by the locale minimal days, whatever the engine reports', () => {
+    const el = makePicker({ inline: true, locale: 'en-US', value: '2026-01-15', 'show-week-numbers': true });
+    const weekOf = (minimalDays, iso) => {
+      el._minimalDays = minimalDays;
+      el.goToMonth(2026, Number(iso.slice(5, 7))); // re-renders
+      return day(el, iso).closest('tr').querySelector('.idp-week-number').textContent;
+    };
+    // Sunday starts. Jan 1 2026 is a Thursday: the week of Dec 28 has 3 days in 2026.
+    expect(weekOf(1, '2026-01-01')).toBe('1'); // US: the week containing Jan 1
+    expect(weekOf(4, '2026-01-01')).toBe('53'); // needs 4 days: still 2025's last week
+    expect(weekOf(4, '2026-01-04')).toBe('1');
+    el.setAttribute('first-day-of-week', 'mon');
+    expect(weekOf(4, '2026-10-12')).toBe('42'); // ISO week 42
+    expect(weekOf(1, '2026-10-12')).toBe('42');
   });
 
   it('works for fa-IR with Monday starts', () => {

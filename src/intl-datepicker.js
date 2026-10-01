@@ -1946,7 +1946,9 @@ class IntlDatepicker extends HTMLElementBase {
   _getWeekNumber(date) {
     try {
       const { locale, firstDayOfWeek } = this._state;
-      const pivot = this._minimalDays - 1;
+      // A week has at least minimalDays days in the year of its
+      // (7 − minimalDays)th day (the Thursday for ISO's 4).
+      const pivot = 7 - this._minimalDays;
       const weekStart = startOfWeek(date, locale, firstDayOfWeek);
       // `set` keeps the era, so this is the right year in Japanese too.
       const yearStart = weekStart.add({ days: pivot }).set({ month: 1, day: 1 });

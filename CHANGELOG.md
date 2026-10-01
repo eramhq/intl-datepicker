@@ -85,6 +85,9 @@ Selection rules: range rules, richer disabling and a first day of week.
   date library's; both now use the same resolved first day.
 - Week numbers for Japanese dates before the current era were computed
   against the wrong year.
+- Week numbers were off by one for locales whose week 1 needs fewer (or more)
+  than 4 days in the new year, such as `en-US` (1 day) in engines that report
+  it. Only ISO-style locales were numbered correctly.
 - React types: `IntlDatepickerProps` declared `onChange`/`onSelect`
   incompatibly with the `HTMLAttributes` it extends, and the raw
   `<intl-datepicker>` JSX element wasn't typed for React 19 (`React.JSX`).
