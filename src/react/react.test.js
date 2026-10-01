@@ -47,6 +47,24 @@ describe('React wrapper', () => {
     expect(el.hasAttribute('inline')).toBe(false);
   });
 
+  it('maps the v0.4 rule props to attributes', () => {
+    const el = render({
+      type: 'range', minNights: 2, maxNights: '28', excludeDisabled: 'nights',
+      firstDayOfWeek: 'mon', disabledDaysOfWeek: 'fri', disablePast: true, disableFuture: false,
+    });
+    expect(el.getAttribute('min-nights')).toBe('2');
+    expect(el.getAttribute('max-nights')).toBe('28');
+    expect(el.getAttribute('exclude-disabled')).toBe('nights');
+    expect(el.getAttribute('first-day-of-week')).toBe('mon');
+    expect(el.getAttribute('disabled-days-of-week')).toBe('fri');
+    expect(el.hasAttribute('disable-past')).toBe(true);
+    expect(el.hasAttribute('disable-future')).toBe(false);
+    act(() => root.render(createElement(IntlDatepicker, { type: 'range', excludeDisabled: true })));
+    expect(el.getAttribute('exclude-disabled')).toBe('');
+    act(() => root.render(createElement(IntlDatepicker, { type: 'range', excludeDisabled: false })));
+    expect(el.hasAttribute('exclude-disabled')).toBe(false);
+  });
+
   it('accepts labels and presets as objects or JSON strings', () => {
     const el = render({
       type: 'range', inline: true,

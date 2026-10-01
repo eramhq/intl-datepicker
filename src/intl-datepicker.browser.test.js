@@ -199,3 +199,56 @@ describe('accessible names and semantics', () => {
     expect($(el, '[aria-live]').textContent).toBe('July 2024');
   });
 });
+
+describe('range rules', () => {
+  // Booked nights Mar 12–13 2026; check-out on the 12th is allowed.
+  const hotel = (attrs = 'inline') => mount(`<intl-datepicker type="range" locale="en-US" ${attrs} no-animation
+    value="2026-03-08" min-nights="2" max-nights="28" exclude-disabled="nights"
+    disabled-dates='["2026-03-12/2026-03-13"]'></intl-datepicker>`).firstElementChild;
+  const day = (el, iso) => $(el, `.idp-day[data-iso="${iso}"]`);
+  const inRange = (el) => Array.from(el.shadowRoot.querySelectorAll('.idp-day.in-range'), b => b.dataset.iso);
+
+  it('the hover preview reaches the check-out day but not past it', async () => {
+    const el = hotel();
+    await userEvent.hover(day(el, '2026-03-12'));
+    expect(day(el, '2026-03-12').classList.contains('checkout-only')).toBe(true);
+    expect(inRange(el)).toEqual(['2026-03-08', '2026-03-09', '2026-03-10', '2026-03-11', '2026-03-12']);
+
+    await userEvent.hover(day(el, '2026-03-14'));
+    expect(inRange(el)).toEqual([]);
+    expect(day(el, '2026-03-14').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('Enter on a blocked day announces why and selects nothing', async () => {
+    const el = hotel();
+    day(el, '2026-03-08').focus();
+    await userEvent.keyboard('{ArrowRight}{Enter}');
+    expect(el.shadowRoot.activeElement.dataset.iso).toBe('2026-03-09');
+    expect($(el, '[aria-live]').textContent).toBe('Choose at least 2 nights');
+    expect(el.value).toBe('2026-03-08');
+    expect($(el, '[part="range-hint"]').textContent).toBe('Minimum stay: 2 nights · Maximum: 28 nights');
+  });
+
+  it('a valid end completes the range and closes the popup', async () => {
+    const el = hotel('');
+    const cal = await openPicker(el);
+    expect(el.shadowRoot.activeElement.dataset.iso).toBe('2026-03-08');
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}{Enter}');
+    expect(el.value).toBe('2026-03-08/2026-03-12');
+    await new Promise(r => setTimeout(r, 250));
+    expect(cal.matches(':popover-open')).toBe(false);
+  });
+
+  it('a required half range submits nothing valid', async () => {
+    const host = mount(`<form><intl-datepicker name="stay" type="range" required value="2026-03-08"></intl-datepicker></form>`);
+    const form = host.querySelector('form');
+    const el = form.firstElementChild;
+    expect(new FormData(form).get('stay')).toBe('2026-03-08');
+    expect(el.checkValidity()).toBe(false);
+    expect(el.validity.valueMissing).toBe(true);
+    expect(el.validationMessage).toBe('Select an end date');
+
+    el.value = '2026-03-08/2026-03-10';
+    expect(el.checkValidity()).toBe(true);
+  });
+});

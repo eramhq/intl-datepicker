@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CalendarDate, toCalendar } from '@internationalized/date';
-import { generateMonthGrid, getMonthCount } from '../calendar-grid.js';
+import { generateMonthGrid, getMonthOptions } from '../calendar-grid.js';
 import { createState } from '../state.js';
 import { getCalendar } from '../locale.js';
 
@@ -74,32 +74,30 @@ describe('generateMonthGrid', () => {
   });
 });
 
-describe('getMonthCount', () => {
-  it('returns 12 for Gregorian', () => {
-    const cal = getCalendar('gregory');
-    expect(getMonthCount(cal, 2024)).toBe(12);
+describe('getMonthOptions', () => {
+  const count = (calendarId, value) => {
+    const state = createState({ calendarId, value });
+    return getMonthOptions(state, state._fmt).length;
+  };
+
+  it('returns 12 months for Gregorian and Persian', () => {
+    expect(count('gregory', '2024-06-01')).toBe(12);
+    expect(count('persian', '2024-06-01')).toBe(12);
   });
 
-  it('returns 12 for Persian', () => {
-    const cal = getCalendar('persian');
-    expect(getMonthCount(cal, 1403)).toBe(12);
+  it('returns 13 months in a Hebrew leap year, 12 otherwise', () => {
+    expect(count('hebrew', '2024-01-01')).toBe(13); // 5784
+    expect(count('hebrew', '2025-01-01')).toBe(12); // 5785
   });
 
-  it('returns 13 for Hebrew leap year', () => {
-    const cal = getCalendar('hebrew');
-    // 5784 is a Hebrew leap year (13 months)
-    expect(getMonthCount(cal, 5784)).toBe(13);
+  it('returns 13 months for Ethiopic', () => {
+    expect(count('ethiopic', '2024-01-01')).toBe(13);
   });
 
-  it('returns 12 for Hebrew non-leap year', () => {
-    const cal = getCalendar('hebrew');
-    // 5785 is not a leap year
-    expect(getMonthCount(cal, 5785)).toBe(12);
-  });
-
-  it('returns 13 for Ethiopic calendar', () => {
-    const cal = getCalendar('ethiopic');
-    // Ethiopic always has 13 months (Pagume is the 13th)
-    expect(getMonthCount(cal, 2016)).toBe(13);
+  it('keeps the era across a Japanese era change', () => {
+    const state = createState({ calendarId: 'japanese', locale: 'en-US', value: '2019-03-15' });
+    const months = getMonthOptions(state, state._fmt);
+    expect(months.map(m => m.date.era)).toEqual([...Array(4).fill('heisei'), ...Array(8).fill('reiwa')]);
+    expect(months[4].iso).toBe('2019-05-01');
   });
 });

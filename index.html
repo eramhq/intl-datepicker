@@ -379,7 +379,7 @@
 <body>
   <!-- ── Header ── -->
   <div class="page-header">
-    <h1>intl-datepicker <span class="badge">v0.2.0</span></h1>
+    <h1>intl-datepicker <span class="badge">v0.4.0</span></h1>
     <p class="subtitle">Framework-agnostic multi-calendar datepicker Web Component</p>
   </div>
 
@@ -434,6 +434,7 @@
           <div class="toc-group">
             <div class="toc-group-title">Selection Modes</div>
             <a href="#sec-range">Range</a>
+            <a href="#sec-range-rules">Range Rules</a>
             <a href="#sec-multiple">Multiple</a>
             <a href="#sec-week">Week</a>
             <a href="#sec-month-year">Month &amp; Year</a>
@@ -444,6 +445,7 @@
             <a href="#sec-inline">Inline + Min/Max</a>
             <a href="#sec-multi-month">Multi-Month</a>
             <a href="#sec-display">Display Options</a>
+            <a href="#sec-first-day">First Day of Week</a>
             <a href="#sec-numerals">Numerals</a>
             <a href="#sec-caption-layout">Caption Layout</a>
             <a href="#sec-fixed-weeks">Fixed Weeks</a>
@@ -576,6 +578,47 @@
 &lt;/intl-datepicker&gt;</code></pre>
         </div>
         <intl-datepicker id="demo-range" type="range" calendar="gregory" locale="en-US" placeholder="Select date range..."></intl-datepicker>
+        <div class="output">No range selected</div>
+      </section>
+
+      <!-- 4b. Range rules -->
+      <section id="sec-range-rules" class="demo-section" data-output>
+        <h2>Range Rules</h2>
+        <p>Length limits in nights, and ranges that can't cross disabled days. With
+          <code>exclude-disabled="nights"</code> check-out may land on the first booked day
+          (someone else checks in); days past it are blocked once check-in is picked.</p>
+        <div class="attr-list">
+          <span class="attr-tag">min-nights</span>
+          <span class="attr-tag">max-nights</span>
+          <span class="attr-tag">exclude-disabled</span>
+          <span class="attr-tag">disable-past</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;!-- Hotel: booked nights from the availability feed --&gt;
+&lt;intl-datepicker type="range" months="2" disable-past
+  min-nights="2" max-nights="28" exclude-disabled="nights"
+  disabled-dates='["2026-10-20/2026-10-22","2026-11-03"]'&gt;
+&lt;/intl-datepicker&gt;
+
+&lt;!-- Leave request: may span weekends and holidays, can't start or end on one --&gt;
+&lt;intl-datepicker type="range" disable-weekends
+  disabled-dates='["2026-12-24/2026-12-26"]'&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <div>
+            <p><strong>Hotel booking</strong> (booked nights struck through)</p>
+            <intl-datepicker id="demo-hotel" type="range" calendar="gregory" locale="en-US" inline months="2"
+              disable-past min-nights="2" max-nights="28" exclude-disabled="nights"></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>Leave request</strong> (weekends and holidays disabled)</p>
+            <intl-datepicker id="demo-leave" type="range" calendar="gregory" locale="en-US" placeholder="First day – last day"
+              disable-weekends></intl-datepicker>
+          </div>
+        </div>
         <div class="output">No range selected</div>
       </section>
 
@@ -762,6 +805,34 @@
       </section>
 
       <!-- Numerals -->
+      <section id="sec-first-day" class="demo-section" data-output>
+        <h2>First Day of Week</h2>
+        <p>Override the locale's first day. The weekday header, grid, Home/End, week picker and
+          week numbers all follow it. Try it with the Persian locale in the bar above.</p>
+        <div class="attr-list">
+          <span class="attr-tag">first-day-of-week</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker type="week" first-day-of-week="mon" show-week-numbers&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="controls">
+          <label>first-day-of-week:
+            <select data-toggle-attr="first-day-of-week" data-target="demo-first-day">
+              <option value="">Locale default</option>
+              <option value="sun">sun</option>
+              <option value="mon" selected>mon</option>
+              <option value="sat">sat</option>
+            </select>
+          </label>
+        </div>
+        <intl-datepicker id="demo-first-day" type="week" calendar="gregory" locale="en-US" inline show-week-numbers
+          first-day-of-week="mon"></intl-datepicker>
+        <div class="output">No week selected</div>
+      </section>
+
       <section id="sec-numerals" class="demo-section">
         <h2>Numerals Override</h2>
         <p>Decouple the numeral system from the locale. Use Persian calendar with Latin digits, or Gregorian calendar with Arabic-Indic numerals.</p>
@@ -883,14 +954,20 @@
         <div class="attr-list">
           <span class="attr-tag">disabled-dates</span>
           <span class="attr-tag">disable-weekends</span>
+          <span class="attr-tag">disabled-days-of-week</span>
+          <span class="attr-tag">disable-past</span>
           <span class="attr-tag">disabledDatesFilter</span>
         </div>
         <div class="code-block">
           <span class="code-label">HTML</span>
           <button class="copy-btn">Copy</button>
-          <pre><code>&lt;!-- Static list --&gt;
+          <pre><code>&lt;!-- Dates and inclusive ranges --&gt;
 &lt;intl-datepicker
-  disabled-dates='["2024-12-25","2024-12-31"]'&gt;
+  disabled-dates='["2024-12-25","2024-12-31/2025-01-01"]'&gt;
+&lt;/intl-datepicker&gt;
+
+&lt;!-- Closed Fridays, no past days --&gt;
+&lt;intl-datepicker disabled-days-of-week="fri" disable-past&gt;
 &lt;/intl-datepicker&gt;
 
 &lt;!-- Weekends --&gt;
@@ -919,6 +996,12 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
           <div>
             <p><strong>Custom filter</strong> (even days disabled)</p>
             <intl-datepicker id="demo-disabled-filter" calendar="gregory" locale="en-US" placeholder="Odd days only"
+            ></intl-datepicker>
+          </div>
+          <div>
+            <p><strong>Clinic</strong> (closed Fridays, Dec 20 – Jan 5, no past days)</p>
+            <intl-datepicker id="demo-disabled-clinic" calendar="gregory" locale="en-US" placeholder="Appointment"
+              disabled-days-of-week="fri" disabled-dates='["2026-12-20/2027-01-05"]' disable-past
             ></intl-datepicker>
           </div>
         </div>
@@ -1186,6 +1269,24 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
       themePicker.style.setProperty('--idp-radius', themeRadius.value + 'px');
       themeRadiusVal.textContent = themeRadius.value + 'px';
     });
+
+    // ── Range rules: hotel and leave demos, relative to today ─────
+    const isoIn = (days) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const hotel = document.getElementById('demo-hotel');
+    const booked = [`${isoIn(6)}/${isoIn(8)}`, `${isoIn(19)}/${isoIn(20)}`, isoIn(33)];
+    hotel.setAttribute('disabled-dates', JSON.stringify(booked));
+    // Strike through booked days (not past ones); label the check-out day.
+    const todayIso = isoIn(0);
+    hotel.mapDays = ({ date, isDisabled, isCheckoutOnly }) => {
+      if (isCheckoutOnly) return { title: 'Check-out only', style: 'text-decoration: line-through dotted' };
+      if (isDisabled && date.iso >= todayIso) return { style: 'text-decoration: line-through' };
+      return null;
+    };
+    document.getElementById('demo-leave').setAttribute('disabled-dates', JSON.stringify([`${isoIn(10)}/${isoIn(12)}`, isoIn(24)]));
 
     // ── Disabled dates: custom filter ──────────────────────────────
     document.getElementById('demo-disabled-filter').disabledDatesFilter = ({ day }) => day % 2 === 0;

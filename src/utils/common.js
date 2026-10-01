@@ -1,4 +1,4 @@
-import { toCalendar, today, CalendarDate } from '@internationalized/date';
+import { toCalendar, today, CalendarDate, startOfMonth, endOfMonth, startOfYear, endOfYear } from '@internationalized/date';
 import { getCalendar } from '../core/locale.js';
 
 /**
@@ -33,52 +33,42 @@ export function getTimeZone() {
 }
 
 /**
- * Resolve a relative date expression to a CalendarDate.
+ * Today in the browser time zone, in `calendar`.
+ */
+export function todayIn(calendar) {
+  return toCalendar(today(getTimeZone()), calendar);
+}
+
+const RELATIVE_DATES = {
+  today: d => d,
+  monthStart: startOfMonth,
+  startOfMonth,
+  monthEnd: endOfMonth,
+  endOfMonth,
+  prevMonthStart: d => startOfMonth(d.subtract({ months: 1 })),
+  prevMonthEnd: d => startOfMonth(d).subtract({ days: 1 }),
+  yearStart: startOfYear,
+  startOfYear,
+  yearEnd: endOfYear,
+  endOfYear,
+};
+
+/**
+ * Resolve a relative date expression to a CalendarDate, clamped to min/max.
  * Expressions: "today", "-Nd"/"+Nd", "monthStart"/"startOfMonth", "monthEnd"/"endOfMonth",
  * "prevMonthStart", "prevMonthEnd", "yearStart"/"startOfYear", "yearEnd"/"endOfYear", or "YYYY-MM-DD".
  */
 export function resolveRelativeDate(expr, calendar, min, max) {
-  const tz = getTimeZone();
-  const now = toCalendar(today(tz), calendar);
-
-  let result;
-
-  if (expr === 'today') {
-    result = now;
-  } else if (/^[+-]\d+d$/.test(expr)) {
-    const days = parseInt(expr);
-    result = now.add({ days });
-  } else if (expr === 'monthStart' || expr === 'startOfMonth') {
-    result = now.set({ day: 1 });
-  } else if (expr === 'monthEnd' || expr === 'endOfMonth') {
-    result = now.set({ day: 1 }).add({ months: 1 }).add({ days: -1 });
-  } else if (expr === 'prevMonthStart') {
-    result = now.set({ day: 1 }).add({ months: -1 });
-  } else if (expr === 'prevMonthEnd') {
-    result = now.set({ day: 1 }).add({ days: -1 });
-  } else if (expr === 'yearStart' || expr === 'startOfYear') {
-    result = now.set({ month: 1, day: 1 });
-  } else if (expr === 'yearEnd' || expr === 'endOfYear') {
-    result = now.set({ month: 1, day: 1 }).add({ years: 1 }).add({ days: -1 });
-  } else {
-    // Try absolute ISO date
-    const match = expr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (match) {
-      try {
-        const greg = new CalendarDate(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
-        result = toCalendar(greg, calendar);
-      } catch {
-        return null;
-      }
-    } else {
-      return null;
-    }
-  }
-
-  // Clamp to min/max
+  const now = todayIn(calendar);
+  const offset = expr.match(/^[+-]\d+(?=d$)/);
+  const iso = expr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let result = Object.hasOwn(RELATIVE_DATES, expr) ? RELATIVE_DATES[expr](now)
+    : offset ? now.add({ days: +offset[0] })
+    : iso ? toCalendar(new CalendarDate(+iso[1], +iso[2], +iso[3]), calendar)
+    : null;
+  if (!result) return null;
   if (min && result.compare(min) < 0) result = min;
   if (max && result.compare(max) > 0) result = max;
-
   return result;
 }
 

@@ -68,7 +68,7 @@ const WEEK_START_FALLBACKS = {
   'he': 7, 'hi': 7, 'pt-BR': 7,
 };
 
-function getWeekInfoField(locale, field) {
+export function getWeekInfoField(locale, field) {
   try {
     const loc = new Intl.Locale(locale);
     const info = typeof loc.getWeekInfo === 'function' ? loc.getWeekInfo() : loc.weekInfo;
@@ -90,6 +90,27 @@ export function getFirstDayOfWeek(locale) {
     return WEEK_START_FALLBACKS[lang];
   }
   return 1; // Monday (ISO default)
+}
+
+const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+/**
+ * Parse a day of week given as 0–6 (0 = Sunday) or `sun`…`sat`. Returns -1
+ * for anything else.
+ */
+export function parseDayOfWeek(value) {
+  const v = String(value).trim().toLowerCase();
+  return /^[0-6]$/.test(v) ? +v : DAY_NAMES.indexOf(v);
+}
+
+/**
+ * Resolve the `first-day-of-week` attribute to the `'sun'`…`'sat'` form
+ * `@internationalized/date` takes. Invalid or missing values fall back to
+ * the locale's first day.
+ */
+export function resolveFirstDayOfWeek(attr, locale) {
+  const day = attr == null ? -1 : parseDayOfWeek(attr);
+  return DAY_NAMES[day >= 0 ? day : getFirstDayOfWeek(locale) % 7];
 }
 
 export function getMinimalDays(locale) {
@@ -122,23 +143,11 @@ export function resolveLocale(explicit) {
 }
 
 /**
- * Get localized weekday names.
+ * Get localized weekday names, starting at `firstDayOfWeek` (`'sun'`…`'sat'`).
  */
-export function getWeekdayNames(locale, format = 'short', numerals = null) {
-  const effectiveLocale = applyNumerals(locale, numerals);
-  const formatter = new Intl.DateTimeFormat(effectiveLocale, { weekday: format });
-  const names = [];
-  // Jan 1 2024 is a Monday
-  for (let d = 0; d < 7; d++) {
-    const date = new Date(2024, 0, d + 1);
-    names.push(formatter.format(date));
-  }
-  // names[0]=Monday ... names[6]=Sunday
-  // Reorder based on firstDay
-  const firstDay = getFirstDayOfWeek(locale);
-  // Intl weekdays: Mon=1, Tue=2, ..., Sun=7
-  // Our array: index 0=Mon, 1=Tue, ..., 6=Sun
-  // firstDay=1 → offset 0, firstDay=6 → offset 5, firstDay=7 → offset 6
-  const offset = firstDay === 7 ? 6 : firstDay - 1;
-  return [...names.slice(offset), ...names.slice(0, offset)];
+export function getWeekdayNames(locale, format = 'short', numerals = null, firstDayOfWeek = resolveFirstDayOfWeek(null, locale)) {
+  const formatter = new Intl.DateTimeFormat(applyNumerals(locale, numerals), { weekday: format });
+  const first = DAY_NAMES.indexOf(firstDayOfWeek);
+  // Jan 7 2024 is a Sunday.
+  return Array.from({ length: 7 }, (_, i) => formatter.format(new Date(2024, 0, 7 + first + i)));
 }

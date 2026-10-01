@@ -9,7 +9,7 @@ const BOOLEAN_ATTRS = [
   'inline', 'disabled', 'readonly', 'required', 'show-alternate',
   'disable-weekends', 'sort-dates', 'no-animation',
   'show-week-numbers', 'hide-outside-days', 'allow-input',
-  'fixed-weeks',
+  'fixed-weeks', 'disable-past', 'disable-future',
 ];
 
 const STRING_ATTRS = [
@@ -17,11 +17,15 @@ const STRING_ATTRS = [
   'for', 'placeholder', 'name',
   'disabled-dates', 'date-separator', 'max-dates',
   'months', 'date-format', 'caption-layout',
+  'min-nights', 'max-nights', 'disabled-days-of-week', 'first-day-of-week',
 ];
+
+// Boolean or string: `true` sets the bare attribute, a string passes through.
+const BOOLEAN_OR_STRING_ATTRS = ['exclude-disabled'];
 
 // Camel-cased lookup of every attribute name we manage so we can route
 // unknown props to the underlying element via JSX.
-const ATTR_NAMES = new Set([...BOOLEAN_ATTRS, ...STRING_ATTRS, 'presets', 'labels']);
+const ATTR_NAMES = new Set([...BOOLEAN_ATTRS, ...STRING_ATTRS, ...BOOLEAN_OR_STRING_ATTRS, 'presets', 'labels']);
 const CAMEL_TO_ATTR = new Map();
 for (const attr of ATTR_NAMES) {
   CAMEL_TO_ATTR.set(toCamel(attr), attr);
@@ -35,7 +39,7 @@ const EVENT_HANDLER_PROPS = new Set([
 // JS-only properties that must be assigned via the property setter, never
 // via setAttribute (functions, arrays, plain objects).
 const PROPERTY_KEYS = new Set([
-  'mapDays', 'disabledDatesFilter', 'isDateDisabled',
+  'mapDays', 'disabledDatesFilter',
 ]);
 
 // Props accepted in two forms: a JS value (object/array → property setter)
@@ -141,7 +145,7 @@ const IntlDatepicker = forwardRef(function IntlDatepicker(props, ref) {
 
     const attrName = CAMEL_TO_ATTR.get(key);
     if (attrName) {
-      if (BOOLEAN_ATTRS.includes(attrName)) {
+      if (BOOLEAN_ATTRS.includes(attrName) || (BOOLEAN_OR_STRING_ATTRS.includes(attrName) && typeof val !== 'string')) {
         // Never pass `false`: React 18 would write the string "false".
         if (val) elementProps[attrName] = '';
       } else if (val !== undefined && val !== null && val !== false) {

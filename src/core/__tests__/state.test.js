@@ -634,8 +634,12 @@ describe('createState type-aware parsing (audit fix 2)', () => {
     const state = createState({ type: 'week', min: '2024-W05', max: '2024-W52', locale: 'en-US' });
     expect(state.min).not.toBeNull();
     expect(state.max).not.toBeNull();
-    // min should be Monday of W5 = 2024-01-29
-    expect(toISO(state.min)).toBe('2024-01-29');
+    // ISO week bounds cover the whole locale week (en-US: Sunday–Saturday)
+    // containing the ISO week's Thursday.
+    expect(toISO(state.min)).toBe('2024-01-28');
+    expect(toISO(state.max)).toBe('2024-12-28');
+    const gb = createState({ type: 'week', min: '2024-W05', locale: 'en-GB' });
+    expect(toISO(gb.min)).toBe('2024-01-29');
   });
 
   it('returns null min/max for invalid type-aware values', () => {

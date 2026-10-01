@@ -1,46 +1,60 @@
+import { CalendarDate, toCalendar, startOfMonth, startOfYear } from '@internationalized/date';
 import { chevronLeft, chevronRight, chevronDown } from '../styles.js';
 import { formatMonthYear } from '../utils/format.js';
-import { escAttr } from '../utils/common.js';
-import { applyNumerals } from './locale.js';
+import { escAttr, calendarDateToNative } from '../utils/common.js';
+import { getCalendar } from './locale.js';
 import { getMonthOptions } from './calendar-grid.js';
-import { getNavLimits } from './state.js';
+import { getNavLimits, firstOfView, toISO } from './state.js';
 
-function getYearFormatter(state) {
-  if (state._fmt) return state._fmt.number;
-  try {
-    return new Intl.NumberFormat(applyNumerals(state.locale, state.numerals), { useGrouping: false });
-  } catch { return null; }
+// Japanese years restart with each era, so its year view and dropdown list
+// Gregorian years, labelled in their era. Other calendars use native years.
+const isJapanese = (state) => state.calendarId === 'japanese';
+
+function yearOf(state, date) {
+  return isJapanese(state) ? toCalendar(date, getCalendar('gregory')).year : date.year;
 }
 
-function formatYearNum(year, formatter) {
-  return formatter ? formatter.format(year) : String(year);
+function yearStart(state, year) {
+  return isJapanese(state)
+    ? toCalendar(new CalendarDate(year, 1, 1), state.calendar)
+    : new CalendarDate(state.calendar, year, 1, 1);
 }
 
-function getYearRange(state) {
-  const minYear = state.min ? state.min.year : state.viewYear - 100;
-  const maxYear = state.max ? state.max.year : state.viewYear + 20;
-  const low = Math.min(minYear, state.viewYear);
-  const high = Math.max(maxYear, state.viewYear);
-  return { low, high };
+function yearLabel(state, date) {
+  return isJapanese(state)
+    ? state._fmt.year.format(calendarDateToNative(date))
+    : state._fmt.number.format(date.year);
+}
+
+// Year cells from `low` to `high`: `{year, date, disabled}`, where `date` is
+// the year's first day and `disabled` means wholly outside min/max.
+function yearCells(state, low, high) {
+  const cells = [];
+  for (let y = low; y <= high; y++) {
+    const date = yearStart(state, y);
+    const disabled = !!((state.min && date.compare(startOfYear(state.min)) < 0) || (state.max && date.compare(state.max) > 0));
+    cells.push({ year: y, date, disabled });
+  }
+  return cells;
 }
 
 function renderMonthDropdown(state, months) {
   let html = `<select class="idp-dropdown idp-month-dropdown" part="month-dropdown" data-action="dropdown-month" aria-label="${escAttr(state.labels.selectMonth)}">`;
   for (const m of months) {
-    html += `<option value="${m.value}"${m.value === state.viewMonth ? ' selected' : ''}>${escAttr(m.label)}</option>`;
+    html += `<option value="${m.iso}"${m.value === state.viewMonth ? ' selected' : ''}>${escAttr(m.label)}</option>`;
   }
-  html += '</select>';
-  return html;
+  return html + '</select>';
 }
 
-function renderYearDropdown(state, yearFmt) {
-  const { low, high } = getYearRange(state);
+function renderYearDropdown(state) {
+  const view = yearOf(state, firstOfView(state));
+  const low = Math.min(state.min ? yearOf(state, state.min) : view - 100, view);
+  const high = Math.max(state.max ? yearOf(state, state.max) : view + 20, view);
   let html = `<select class="idp-dropdown idp-year-dropdown" part="year-dropdown" data-action="dropdown-year" aria-label="${escAttr(state.labels.selectYear)}">`;
-  for (let y = low; y <= high; y++) {
-    html += `<option value="${y}"${y === state.viewYear ? ' selected' : ''}>${formatYearNum(y, yearFmt)}</option>`;
+  for (const { year, date } of yearCells(state, low, high)) {
+    html += `<option value="${toISO(date)}"${year === view ? ' selected' : ''}>${escAttr(yearLabel(state, date))}</option>`;
   }
-  html += '</select>';
-  return html;
+  return html + '</select>';
 }
 
 /**
@@ -60,7 +74,7 @@ export function renderNavButton(dir, state, disabled) {
  * Returns HTML string.
  */
 export function renderHeader(state, view, captionLayout = 'button', titleId = 'idp-title-0') {
-  const { viewYear, viewMonth, locale, calendarId, labels } = state;
+  const { viewMonth, labels } = state;
   const isRTL = state._isRTL;
   const prevArrow = isRTL ? chevronRight : chevronLeft;
   const nextArrow = isRTL ? chevronLeft : chevronRight;
@@ -75,21 +89,20 @@ export function renderHeader(state, view, captionLayout = 'button', titleId = 'i
 
   // Dropdown caption layouts
   if (captionLayout !== 'button') {
-    const yearFmt = getYearFormatter(state);
-    const months = getMonthOptions(state.calendarId, state.viewYear, state.locale, state.numerals, state._fmt);
+    const months = getMonthOptions(state, state._fmt);
     const limits = getNavLimits(state);
-    const title = formatMonthYear(viewYear, viewMonth, locale, calendarId, state.numerals, state._fmt);
+    const title = formatMonthYear(firstOfView(state), state._fmt);
     let titleContent = `<span class="idp-sr-only" id="${titleId}">${title}</span>`;
 
     if (captionLayout === 'dropdown') {
-      titleContent += renderMonthDropdown(state, months) + renderYearDropdown(state, yearFmt);
+      titleContent += renderMonthDropdown(state, months) + renderYearDropdown(state);
     } else if (captionLayout === 'dropdown-months') {
       titleContent += renderMonthDropdown(state, months) +
-        `<button class="idp-header-btn" data-action="show-years" type="button" aria-label="${escAttr(labels.selectYear)}">${formatYearNum(viewYear, yearFmt)} ${chevronDown}</button>`;
+        `<button class="idp-header-btn" data-action="show-years" type="button" aria-label="${escAttr(labels.selectYear)}">${yearLabel(state, firstOfView(state))} ${chevronDown}</button>`;
     } else if (captionLayout === 'dropdown-years') {
       const currentMonthName = months.find(m => m.value === viewMonth)?.label || '';
       titleContent += `<button class="idp-header-btn" data-action="show-months" type="button" aria-label="${escAttr(labels.selectMonth)}">${escAttr(currentMonthName)}</button>` +
-        renderYearDropdown(state, yearFmt);
+        renderYearDropdown(state);
     }
 
     return `
@@ -103,7 +116,7 @@ export function renderHeader(state, view, captionLayout = 'button', titleId = 'i
     `;
   }
 
-  const headerTitle = formatMonthYear(viewYear, viewMonth, locale, calendarId, state.numerals, state._fmt);
+  const headerTitle = formatMonthYear(firstOfView(state), state._fmt);
   const limits = getNavLimits(state);
 
   // The button's name keeps the visible month text (WCAG 2.5.3 label-in-name).
@@ -122,9 +135,8 @@ export function renderHeader(state, view, captionLayout = 'button', titleId = 'i
 
 function renderYearViewHeader(state, prevArrow, nextArrow) {
   const { labels } = state;
-  const decadeStart = Math.floor(state.viewYear / 20) * 20;
-  const decadeEnd = decadeStart + 19;
-  const yearFmt = getYearFormatter(state);
+  const decadeStart = Math.floor(yearOf(state, firstOfView(state)) / 20) * 20;
+  const num = state._fmt.number;
 
   return `
     <div class="idp-header" part="header" role="group" aria-label="${escAttr(labels.yearSelection)}">
@@ -133,7 +145,7 @@ function renderYearViewHeader(state, prevArrow, nextArrow) {
       </button>
       <div class="idp-header-title" part="header-title">
         <button class="idp-header-btn" data-action="show-days" type="button">
-          ${formatYearNum(decadeStart, yearFmt)} – ${formatYearNum(decadeEnd, yearFmt)}
+          ${num.format(decadeStart)} – ${num.format(decadeStart + 19)}
         </button>
       </div>
       <button class="idp-nav-btn" part="nav-next" data-action="next-decade" aria-label="${escAttr(labels.nextDecade)}" type="button">
@@ -145,12 +157,11 @@ function renderYearViewHeader(state, prevArrow, nextArrow) {
 
 function renderMonthViewHeader(state) {
   const { labels } = state;
-  const yearFmt = getYearFormatter(state);
   return `
     <div class="idp-header" part="header" role="group" aria-label="${escAttr(labels.monthSelection)}">
       <div class="idp-header-title" part="header-title">
         <button class="idp-header-btn" data-action="show-years" type="button" aria-label="${escAttr(labels.selectYear)}">
-          ${formatYearNum(state.viewYear, yearFmt)} ${chevronDown}
+          ${yearLabel(state, firstOfView(state))} ${chevronDown}
         </button>
       </div>
     </div>
@@ -158,48 +169,38 @@ function renderMonthViewHeader(state) {
 }
 
 /**
- * Render a grid of years for the year picker view.
+ * Render a grid of years for the year picker view. Each cell carries the ISO
+ * date of its year's first day.
  */
 export function renderYearGrid(state) {
-  const decadeStart = Math.floor(state.viewYear / 20) * 20;
-  const yearFmt = getYearFormatter(state);
+  const view = yearOf(state, firstOfView(state));
+  const decadeStart = Math.floor(view / 20) * 20;
   let html = `<div class="idp-year-grid" role="group" aria-label="${escAttr(state.labels.yearSelection)}">`;
 
-  for (let y = decadeStart; y < decadeStart + 20; y++) {
-    const isCurrent = y === state.viewYear;
-    const isDisabled = (state.min && y < state.min.year) || (state.max && y > state.max.year);
-    const classes = ['idp-year-cell'];
-    if (isCurrent) classes.push('selected');
-
-    html += `<button class="${classes.join(' ')}" part="year-cell" data-action="select-year" data-year="${y}" type="button"
+  for (const { year, date, disabled } of yearCells(state, decadeStart, decadeStart + 19)) {
+    const isCurrent = year === view;
+    html += `<button class="idp-year-cell${isCurrent ? ' selected' : ''}" part="year-cell" data-action="select-year" data-year="${year}" data-iso="${toISO(date)}" type="button"
       ${isCurrent ? 'aria-current="true"' : ''}
-      ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${formatYearNum(y, yearFmt)}</button>`;
+      ${disabled ? 'aria-disabled="true" disabled' : ''}>${escAttr(yearLabel(state, date))}</button>`;
   }
 
-  html += '</div>';
-  return html;
+  return html + '</div>';
 }
 
 /**
  * Render a grid of months for the month picker view.
  */
 export function renderMonthGrid(state) {
-  const months = getMonthOptions(state.calendarId, state.viewYear, state.locale, state.numerals, state._fmt);
+  const { min, max } = state;
   let html = `<div class="idp-month-grid" role="group" aria-label="${escAttr(state.labels.monthSelection)}">`;
 
-  for (const month of months) {
+  for (const month of getMonthOptions(state, state._fmt)) {
     const isCurrent = month.value === state.viewMonth;
-    const isDisabled =
-      (state.min && (state.viewYear < state.min.year || (state.viewYear === state.min.year && month.value < state.min.month))) ||
-      (state.max && (state.viewYear > state.max.year || (state.viewYear === state.max.year && month.value > state.max.month)));
-    const classes = ['idp-month-cell'];
-    if (isCurrent) classes.push('selected');
-
-    html += `<button class="${classes.join(' ')}" part="month-cell" data-action="select-month" data-month="${month.value}" type="button"
+    const isDisabled = (min && month.date.compare(startOfMonth(min)) < 0) || (max && month.date.compare(max) > 0);
+    html += `<button class="idp-month-cell${isCurrent ? ' selected' : ''}" part="month-cell" data-action="select-month" data-month="${month.value}" data-iso="${month.iso}" type="button"
       ${isCurrent ? 'aria-current="true"' : ''}
-      ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${month.label}</button>`;
+      ${isDisabled ? 'aria-disabled="true" disabled' : ''}>${escAttr(month.label)}</button>`;
   }
 
-  html += '</div>';
-  return html;
+  return html + '</div>';
 }

@@ -40,6 +40,16 @@ export const DEFAULT_LABELS_EN = Object.freeze({
   pleaseSelectDate: 'Please select a date',
   dateTooEarly: 'Date must be {date} or later',
   dateTooLate: 'Date must be {date} or earlier',
+  // Range rules. {nights} is a formatted `nights` count, e.g. "2 nights".
+  rangeTooShort: 'Choose at least {nights}',
+  rangeTooLong: 'Choose at most {nights}',
+  rangeUnavailable: 'The range includes unavailable dates',
+  rangeIncomplete: 'Select an end date',
+  minNightsHint: 'Minimum stay: {nights}',
+  maxNightsHint: 'Maximum: {nights}',
+  // A string, or plural forms keyed by Intl.PluralRules category. {n} is the
+  // count in the picker's numerals.
+  nights: { one: '{n} night', other: '{n} nights' },
 });
 
 const labelRegistry = new Map();
@@ -59,10 +69,20 @@ export function resolveLabels(locale, userOverrides) {
   if (localeDefaults) Object.assign(merged, localeDefaults);
   if (userOverrides && typeof userOverrides === 'object') {
     for (const [k, v] of Object.entries(userOverrides)) {
-      if (typeof v === 'string' && v.length > 0) merged[k] = v;
+      // Plural labels (like `nights`) also take an object of plural forms.
+      if ((typeof v === 'string' && v.length > 0) || (typeof v?.other === 'string' && typeof DEFAULT_LABELS_EN[k] === 'object')) merged[k] = v;
     }
   }
   return merged;
+}
+
+/**
+ * Fill a plural label (a string, or forms keyed by plural category) for `n`,
+ * using the picker's PluralRules and number formatter.
+ */
+export function fillPlural(label, n, fmt) {
+  const form = typeof label === 'string' ? label : label[fmt.plural.select(n)] ?? label.other;
+  return fillLabel(form, { n: fmt.number.format(n) });
 }
 
 /**
