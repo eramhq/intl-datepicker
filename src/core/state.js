@@ -223,7 +223,7 @@ export function selectDate(state, date) {
     });
   }
 
-  if (isDateDisabled(state, date)) return state;
+  if (state.type !== 'multiple' && isDateDisabled(state, date)) return state;
 
   if (state.type === 'week') {
     return updateState(state, {
@@ -238,8 +238,10 @@ export function selectDate(state, date) {
     const idx = existing.findIndex(d => isSameDay(d, date));
     let newDates;
     if (idx >= 0) {
-      // Toggle off
+      // Toggle off, even a kept date that is now disabled.
       newDates = [...existing.slice(0, idx), ...existing.slice(idx + 1)];
+    } else if (isDateDisabled(state, date)) {
+      return state;
     } else {
       // Check maxDates limit
       if (state.maxDates && existing.length >= state.maxDates) {

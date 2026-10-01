@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   getCalendar, getSupportedCalendars, isRTL,
-  getFirstDayOfWeek, resolveLocale, getWeekdayNames,
+  getFirstDayOfWeek, resolveLocale, getWeekdayNames, getMinimalDays,
 } from '../locale.js';
 
 describe('getCalendar', () => {
@@ -109,5 +109,16 @@ describe('getWeekdayNames', () => {
       expect(typeof name).toBe('string');
       expect(name.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('getMinimalDays', () => {
+  it('uses CLDR data by region: 4 in most of Europe, 1 elsewhere', () => {
+    expect(['en-US', 'en', 'fa-IR', 'ar-EG', 'ja-JP', 'pt-BR'].map(getMinimalDays)).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(['de-DE', 'en-GB', 'fr', 'ru', 'sv-SE'].map(getMinimalDays)).toEqual([4, 4, 4, 4, 4]);
+  });
+
+  it('falls back to ISO for invalid locales', () => {
+    expect(getMinimalDays('not a locale!')).toBe(4);
   });
 });

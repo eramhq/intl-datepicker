@@ -1,4 +1,4 @@
-import { CalendarDate, toCalendar, startOfMonth, startOfYear } from '@internationalized/date';
+import { CalendarDate, toCalendar, startOfMonth, startOfYear, endOfYear } from '@internationalized/date';
 import { chevronLeft, chevronRight, chevronDown } from '../styles.js';
 import { formatMonthYear } from '../utils/format.js';
 import { escAttr, calendarDateToNative } from '../utils/common.js';
@@ -24,6 +24,14 @@ function yearLabel(state, date) {
   return isJapanese(state)
     ? state._fmt.year.format(calendarDateToNative(date))
     : state._fmt.number.format(date.year);
+}
+
+// A year cell starting at `date`. A Japanese year that changes era names
+// both, e.g. "31 Heisei – 1 Reiwa".
+function yearCellLabel(state, date) {
+  return isJapanese(state)
+    ? state._fmt.year.formatRange(calendarDateToNative(date), calendarDateToNative(endOfYear(date)))
+    : yearLabel(state, date);
 }
 
 // Year cells from `low` to `high`: `{year, date, disabled}`, where `date` is
@@ -52,7 +60,7 @@ function renderYearDropdown(state) {
   const high = Math.max(state.max ? yearOf(state, state.max) : view + 20, view);
   let html = `<select class="idp-dropdown idp-year-dropdown" part="year-dropdown" data-action="dropdown-year" aria-label="${escAttr(state.labels.selectYear)}">`;
   for (const { year, date } of yearCells(state, low, high)) {
-    html += `<option value="${toISO(date)}"${year === view ? ' selected' : ''}>${escAttr(yearLabel(state, date))}</option>`;
+    html += `<option value="${toISO(date)}"${year === view ? ' selected' : ''}>${escAttr(yearCellLabel(state, date))}</option>`;
   }
   return html + '</select>';
 }
@@ -181,7 +189,7 @@ export function renderYearGrid(state) {
     const isCurrent = year === view;
     html += `<button class="idp-year-cell${isCurrent ? ' selected' : ''}" part="year-cell" data-action="select-year" data-year="${year}" data-iso="${toISO(date)}" type="button"
       ${isCurrent ? 'aria-current="true"' : ''}
-      ${disabled ? 'aria-disabled="true" disabled' : ''}>${escAttr(yearLabel(state, date))}</button>`;
+      ${disabled ? 'aria-disabled="true" disabled' : ''}>${escAttr(yearCellLabel(state, date))}</button>`;
   }
 
   return html + '</div>';

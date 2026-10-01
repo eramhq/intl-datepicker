@@ -330,3 +330,67 @@ describe('removed APIs', () => {
     expect('isDateDisabled' in el).toBe(false);
   });
 });
+
+describe('v0.4.1 fixes', () => {
+  const navigations = (el) => {
+    const events = [];
+    el.addEventListener('intl-navigate', (e) => events.push(e.detail));
+    return events;
+  };
+
+  it('numbers en-US weeks US-style without engine minimal-days data', () => {
+    const el = makePicker({ inline: true, locale: 'en-US', value: '2026-01-15', 'show-week-numbers': true });
+    // US weeks start on Sunday. The row Dec 28 – Jan 3 holds only 3 days of
+    // 2026: week 1 in the US (minimal days 1), week 53 under the ISO rule.
+    expect(day(el, '2025-12-28').closest('tr').querySelector('.idp-week-number').textContent).toBe('1');
+    const de = makePicker({ inline: true, locale: 'de-DE', value: '2027-01-15', 'show-week-numbers': true });
+    // Jan 1 2027 is a Friday: in Germany that week belongs to 2026 (week 53).
+    expect(day(de, '2027-01-01').closest('tr').querySelector('.idp-week-number').textContent).toBe('53');
+  });
+
+  it('intl-navigate carries the Gregorian bounds of the visible months', () => {
+    const el = makePicker({ inline: true, calendar: 'persian', locale: 'fa-IR', months: '2', value: '2026-03-21' });
+    const events = navigations(el);
+    $(el, '[data-action="next-month"]').click();
+    expect(events).toEqual([{ year: 1405, month: 2, direction: 'forward', start: '2026-04-21', end: '2026-06-21' }]);
+  });
+
+  it('fires intl-navigate for keyboard and month-view navigation', () => {
+    const el = makePicker({ inline: true, locale: 'en-US', value: '2026-03-30' });
+    const events = navigations(el);
+    day(el, '2026-03-30').focus();
+    press(el, 'ArrowRight'); // Mar 31: same month
+    expect(events).toHaveLength(0);
+    press(el, 'ArrowRight'); // Apr 1
+    press(el, 'PageUp'); // Mar 1
+    expect(events.map(e => [e.start, e.direction])).toEqual([['2026-04-01', 'forward'], ['2026-03-01', 'backward']]);
+
+    $(el, '[data-action="show-months"]').click();
+    $(el, '.idp-month-cell[data-iso="2026-03-01"]').click(); // same month: no event
+    expect(events).toHaveLength(2);
+    $(el, '[data-action="show-months"]').click();
+    $(el, '[data-action="show-years"]').click();
+    $(el, '.idp-year-cell[data-year="2027"]').click();
+    $(el, '.idp-month-cell[data-iso="2027-03-01"]').click(); // same month number, next year
+    expect(events.at(-1)).toMatchObject({ year: 2027, month: 3, direction: 'forward', end: '2027-03-31' });
+  });
+
+  it('lets a kept, now-disabled multiple date be removed by clicking it', () => {
+    const el = makePicker({ type: 'multiple', inline: true, value: '2026-05-01,2026-05-02', 'disabled-dates': '["2026-05-02"]' });
+    expect(day(el, '2026-05-02').hasAttribute('aria-disabled')).toBe(false);
+    expect(day(el, '2026-05-03').hasAttribute('aria-disabled')).toBe(false);
+    day(el, '2026-05-02').click();
+    expect(el.value).toBe('2026-05-01');
+    expect(day(el, '2026-05-02').getAttribute('aria-disabled')).toBe('true');
+    day(el, '2026-05-02').click();
+    expect(el.value).toBe('2026-05-01');
+  });
+
+  it('labels a Japanese year that changes era with both eras', () => {
+    const el = makePicker({ inline: true, type: 'year', calendar: 'japanese', locale: 'en-US', value: '2019-06-01' });
+    const label = $(el, '.idp-year-cell[data-year="2019"]').textContent;
+    expect(label).toContain('Heisei');
+    expect(label).toContain('Reiwa');
+    expect($(el, '.idp-year-cell[data-year="2018"]').textContent).not.toContain('Reiwa');
+  });
+});
