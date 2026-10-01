@@ -144,11 +144,11 @@ describe('parseInput — rejects invalid input', () => {
 describe('parseInput — round-trip with formatDateShort', () => {
   // Importing format here is fine since these tests exercise the public surface.
   it('persian fa-IR: parse(format(date)) === date', async () => {
-    const { formatDateShort } = await import('../../utils/format.js');
+    const { formatDateShort, createFormatters } = await import('../../utils/format.js');
     const { CalendarDate } = await import('@internationalized/date');
     const { getCalendar } = await import('../locale.js');
     const original = new CalendarDate(getCalendar('persian'), 1403, 6, 15);
-    const formatted = formatDateShort(original, 'fa-IR', 'persian');
+    const formatted = formatDateShort(original, createFormatters('fa-IR', 'persian'));
     const parsed = parseInput(formatted, 'persian', 'fa-IR');
     expect(parsed).not.toBeNull();
     expect(parsed.year).toBe(1403);

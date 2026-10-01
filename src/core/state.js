@@ -1,7 +1,13 @@
-import { CalendarDate, toCalendar, today, isSameDay, startOfWeek, endOfWeek, startOfMonth, startOfYear, endOfMonth, endOfYear } from '@internationalized/date';
-import { getCalendar } from './locale.js';
+import { CalendarDate, toCalendar, isSameDay, startOfWeek, endOfWeek, startOfMonth, startOfYear, endOfMonth, endOfYear } from '@internationalized/date';
+import { getCalendar, getWeekInfoField, parseDayOfWeek, resolveFirstDayOfWeek } from './locale.js';
 import { resolveLabels } from './labels.js';
-import { getTimeZone, calendarDateToNative, resolveIntlCalendar } from '../utils/common.js';
+import { calendarDateToNative, resolveIntlCalendar, todayIn } from '../utils/common.js';
+import { createFormatters } from '../utils/format.js';
+
+const nonNegativeInt = (v) => {
+  const n = parseInt(v);
+  return n >= 0 ? n : null;
+};
 
 /**
  * Create initial state for the datepicker.
@@ -19,6 +25,12 @@ export function createState(options = {}) {
     disabledDates = null,
     disabledDatesFilter = null,
     disableWeekends = false,
+    disabledDaysOfWeek = null,
+    disablePast = false,
+    disableFuture = false,
+    minNights = null,
+    maxNights = null,
+    excludeDisabled = null,
     isRTL = false,
     maxDates = null,
     sortDates = false,
@@ -27,7 +39,7 @@ export function createState(options = {}) {
   } = options;
 
   const calendar = getCalendar(calendarId);
-  const todayDate = toCalendar(today(getTimeZone()), calendar);
+  const firstDayOfWeek = resolveFirstDayOfWeek(options.firstDayOfWeek, locale);
 
   let selectedDate = null;
   let rangeStart = null;
@@ -35,7 +47,7 @@ export function createState(options = {}) {
   let selectedDates = [];
 
   if (value) {
-    const parsed = parseValueForType(value, type, calendar, locale);
+    const parsed = parseValueForType(value, type, calendar, locale, firstDayOfWeek);
     if (parsed) {
       ({ selectedDate, rangeStart, rangeEnd, selectedDates } = parsed);
       if (type === 'multiple') {
@@ -45,41 +57,135 @@ export function createState(options = {}) {
     }
   }
 
-  let disabledDatesSet = null;
-  if (disabledDates && Array.isArray(disabledDates) && disabledDates.length > 0) {
-    disabledDatesSet = new Set(disabledDates);
+  // Locale weekend + explicit weekdays, as 0 (Sunday) – 6.
+  const dows = new Set(disableWeekends ? getWeekendDays(locale) : []);
+  for (const day of String(disabledDaysOfWeek ?? '').split(',')) {
+    const d = parseDayOfWeek(day);
+    if (d >= 0) dows.add(d);
   }
 
-  const focusDate = selectedDate || rangeStart || (selectedDates.length > 0 ? selectedDates[0] : null) || todayDate;
-
-  return {
+  const state = withToday({
     calendarId,
     calendar,
     locale,
     numerals,
     type,
+    firstDayOfWeek,
     selectedDate,
     selectedDates,
     rangeStart,
     rangeEnd,
-    focusedDate: focusDate,
-    viewYear: focusDate.year,
-    viewMonth: focusDate.month,
     isOpen: inline,
     inline,
-    min: parseBound(min, type, calendar),
-    max: parseBound(max, type, calendar),
+    // User bounds; `min`/`max` are these narrowed by disable-past/-future.
+    _min: parseBound(min, type, calendar, locale, firstDayOfWeek, false),
+    _max: parseBound(max, type, calendar, locale, firstDayOfWeek, true),
+    disablePast,
+    disableFuture,
     hoveredDate: null,
-    disabledDatesSet,
+    _disabledRanges: parseDisabledDates(disabledDates),
     disabledDatesFilter: disabledDatesFilter || null,
-    disableWeekends,
-    _weekendDays: disableWeekends ? getWeekendDays(locale) : [],
+    _disabledDows: dows.size ? [...dows] : null,
+    minNights: nonNegativeInt(minNights) || 0,
+    maxNights: nonNegativeInt(maxNights),
+    // Bare attribute (or "days") excludes whole days; "nights" lets the end
+    // land on a disabled day.
+    excludeDisabled: excludeDisabled === 'nights' ? 'nights' : excludeDisabled != null && excludeDisabled !== false ? 'days' : null,
     _isRTL: isRTL,
     maxDates: maxDates || null,
     sortDates,
     fixedWeeks,
     labels: labels || resolveLabels(locale, null),
-  };
+    _fmt: createFormatters(locale, calendarId, numerals, firstDayOfWeek),
+  }, todayIn(calendar));
+
+  const focusDate = selectedDate || rangeStart || selectedDates[0] || state.today;
+  return Object.assign(state, { focusedDate: focusDate, ...viewOf(focusDate) });
+}
+
+/**
+ * Set `today` and the effective `min`/`max`: disable-past/-future narrow the
+ * user's bounds to today's period for the picker type.
+ */
+function withToday(state, now) {
+  const { type, locale, firstDayOfWeek, _min, _max } = state;
+  const isWeek = type === 'week';
+  const start = isWeek ? startOfWeek(now, locale, firstDayOfWeek)
+    : type === 'month' ? startOfMonth(now)
+    : type === 'year' ? startOfYear(now)
+    : now;
+  // The current week stays selectable under disable-future.
+  const end = isWeek ? endOfWeek(now, locale, firstDayOfWeek) : start;
+  const later = state.disablePast && (!_min || start.compare(_min) > 0) ? start : _min;
+  const earlier = state.disableFuture && (!_max || end.compare(_max) < 0) ? end : _max;
+  return { ...state, today: now, min: later, max: earlier };
+}
+
+/**
+ * Re-derive `today` and the bounds that depend on it once the date has
+ * changed (a calendar left open past midnight). Returns the same state when
+ * nothing changed.
+ */
+export function refreshToday(state) {
+  const now = todayIn(state.calendar);
+  return state.today && !now.compare(state.today) ? state : withToday(state, now);
+}
+
+/**
+ * View fields for the month containing `date`. The era is kept: a bare year
+ * means the current era in the Japanese calendar.
+ */
+export function viewOf(date) {
+  return { viewEra: date.era, viewYear: date.year, viewMonth: date.month };
+}
+
+/**
+ * First day of the visible month, plus `monthOffset` months.
+ */
+export function firstOfView(state, monthOffset = 0) {
+  const { calendar, viewEra, viewYear, viewMonth } = state;
+  const first = viewEra
+    ? new CalendarDate(calendar, viewEra, viewYear, viewMonth, 1)
+    : new CalendarDate(calendar, viewYear, viewMonth, 1);
+  return monthOffset ? first.add({ months: monthOffset }) : first;
+}
+
+/**
+ * Normalize `disabled-dates` entries (`"YYYY-MM-DD"` or inclusive
+ * `"YYYY-MM-DD/YYYY-MM-DD"`) into sorted, merged `[isoStart, isoEnd]`
+ * intervals. Reversed ranges are swapped and invalid entries dropped.
+ */
+export function parseDisabledDates(list) {
+  const valid = (iso) => parseISOToCalendar(iso, getCalendar('gregory'));
+  const intervals = [];
+  for (const item of Array.isArray(list) ? list : []) {
+    const [a, b = a, extra] = typeof item === 'string' ? item.split('/') : [];
+    if (extra === undefined && valid(a) && valid(b)) intervals.push(a <= b ? [a, b] : [b, a]);
+  }
+  // Zero-padded ISO strings sort and compare like dates.
+  intervals.sort((x, y) => (x[0] < y[0] ? -1 : 1));
+  const merged = [];
+  for (const interval of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && interval[0] <= last[1]) {
+      if (interval[1] > last[1]) last[1] = interval[1];
+    } else {
+      merged.push(interval);
+    }
+  }
+  return merged.length ? merged : null;
+}
+
+function inIntervals(intervals, iso) {
+  let lo = 0;
+  let hi = intervals.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (intervals[mid][1] < iso) lo = mid + 1;
+    else if (intervals[mid][0] > iso) hi = mid - 1;
+    else return true;
+  }
+  return false;
 }
 
 /**
@@ -89,39 +195,40 @@ export function updateState(state, changes) {
   return { ...state, ...changes };
 }
 
+const sortPair = (a, b) => (a.compare(b) <= 0 ? [a, b] : [b, a]);
+
 /**
- * Select a date. For range type, handles start/end logic.
- * For multiple type, toggles selection.
+ * Select a date. For range type, handles start/end logic and the range rules.
+ * For multiple type, toggles selection. Returns the same state when the date
+ * can't be selected.
  */
 export function selectDate(state, date) {
-  if (isDateDisabled(state, date)) return state;
-
   if (state.type === 'range') {
-    if (!state.rangeStart || state.rangeEnd) {
-      // Start new range
-      return updateState(state, {
-        rangeStart: date,
-        rangeEnd: null,
-        focusedDate: date,
-        selectedDate: null,
-      });
+    const start = state.rangeStart;
+    if (hasPendingStart(state)) {
+      if (rangeError(state, start, date)) {
+        // Re-picking the start cancels it when a same-day range isn't allowed,
+        // so the user is never stuck.
+        return isSameDay(date, start) ? updateState(state, { rangeStart: null, focusedDate: date }) : state;
+      }
+      const [rangeStart, rangeEnd] = sortPair(start, date);
+      return updateState(state, { rangeStart, rangeEnd, focusedDate: date });
     }
-    // Complete range
-    const start = date.compare(state.rangeStart) < 0 ? date : state.rangeStart;
-    const end = date.compare(state.rangeStart) < 0 ? state.rangeStart : date;
+    if (isDateDisabled(state, date)) return state;
     return updateState(state, {
-      rangeStart: start,
-      rangeEnd: end,
+      rangeStart: date,
+      rangeEnd: null,
       focusedDate: date,
+      selectedDate: null,
     });
   }
 
+  if (isDateDisabled(state, date)) return state;
+
   if (state.type === 'week') {
-    const weekStart = startOfWeek(date, state.locale);
-    const weekEnd = endOfWeek(date, state.locale);
     return updateState(state, {
-      rangeStart: weekStart,
-      rangeEnd: weekEnd,
+      rangeStart: startOfWeek(date, state.locale, state.firstDayOfWeek),
+      rangeEnd: endOfWeek(date, state.locale, state.firstDayOfWeek),
       focusedDate: date,
     });
   }
@@ -156,30 +263,96 @@ export function selectDate(state, date) {
 }
 
 /**
- * Check if a date is disabled (outside min/max, in disabled list, or by filter).
+ * Why the range between `a` and `b` (either order) breaks the range rules:
+ * `'unavailable'`, `'short'` or `'long'`, or null when it is valid.
+ * Length is counted in nights (end − start).
+ */
+export function rangeError(state, a, b) {
+  const [start, end] = sortPair(a, b);
+  const mode = state.excludeDisabled;
+  // Nights mode only needs the nights free: the end may be a disabled day
+  // (check-out on the day someone else checks in), but not out of bounds.
+  if (isDateDisabled(state, start) || (mode === 'nights' ? isOutOfBounds(state, end) : isDateDisabled(state, end))) {
+    return 'unavailable';
+  }
+  if (mode) {
+    for (let d = start.add({ days: 1 }); d.compare(end) < 0; d = d.add({ days: 1 })) {
+      if (isDateDisabled(state, d)) return 'unavailable';
+    }
+  }
+  const nights = end.compare(start);
+  if (nights < state.minNights) return 'short';
+  if (state.maxNights != null && nights > state.maxNights) return 'long';
+  return null;
+}
+
+/**
+ * While a range start is pending, the furthest valid ends on either side of
+ * it: `{lo, hi}` (null = unbounded), plus `checkout`, the disabled day a
+ * nights-mode range may end on. Scans outward from the start to the first
+ * disabled day, `maxNights` or the window edge. Null when no rule applies.
+ */
+export function getRangeLimits(state, windowStart, windowEnd) {
+  const { rangeStart: start, minNights, maxNights, excludeDisabled: mode } = state;
+  if (!(minNights || maxNights != null || mode) || !hasPendingStart(state)) return null;
+  const limits = { lo: null, hi: null, checkout: null };
+  for (const dir of [1, -1]) {
+    const edge = dir > 0 ? windowEnd : windowStart;
+    let limit = maxNights != null ? start.add({ days: dir * maxNights }) : null;
+    if (mode) {
+      for (let d = start.add({ days: dir }); d.compare(edge) * dir <= 0 && !(limit && d.compare(limit) * dir > 0); d = d.add({ days: dir })) {
+        if (!isDateDisabled(state, d)) continue;
+        if (dir > 0 && mode === 'nights' && !isOutOfBounds(state, d)) limits.checkout = limit = d;
+        else limit = d.add({ days: -dir });
+        break;
+      }
+    }
+    limits[dir > 0 ? 'hi' : 'lo'] = limit;
+  }
+  return limits;
+}
+
+/**
+ * Whether a range start is pending that the next pick would end. A pending
+ * start on a disabled day (a kept value) is replaced instead.
+ */
+export function hasPendingStart(state) {
+  return state.type === 'range' && !!state.rangeStart && !state.rangeEnd && !isDateDisabled(state, state.rangeStart);
+}
+
+/**
+ * Whether `date` can't end the pending range, given `getRangeLimits`.
+ * The start itself is never blocked.
+ */
+export function isRangeBlocked(state, date, limits) {
+  if (!limits) return false;
+  const nights = Math.abs(date.compare(state.rangeStart));
+  return nights > 0 && (nights < state.minNights
+    || !!(limits.lo && date.compare(limits.lo) < 0)
+    || !!(limits.hi && date.compare(limits.hi) > 0));
+}
+
+function isOutOfBounds(state, date) {
+  return !!((state.min && date.compare(state.min) < 0) || (state.max && date.compare(state.max) > 0));
+}
+
+/**
+ * Check if a date is disabled (outside min/max, in disabled-dates, on a
+ * disabled weekday, or by the filter).
  */
 export function isDateDisabled(state, date) {
-  if (state.min && date.compare(state.min) < 0) return true;
-  if (state.max && date.compare(state.max) > 0) return true;
-
-  if (state.disabledDatesSet) {
-    const iso = toISO(date);
-    if (state.disabledDatesSet.has(iso)) return true;
-  }
-
-  const needsDayOfWeek = state.disableWeekends || state.disabledDatesFilter;
-  const dayOfWeek = needsDayOfWeek ? getDayOfWeek(date) : -1;
-
-  if (state.disableWeekends) {
-    if (state._weekendDays.includes(dayOfWeek)) return true;
-  }
-
-  if (state.disabledDatesFilter) {
+  if (isOutOfBounds(state, date)) return true;
+  const { _disabledRanges: ranges, _disabledDows: dows, disabledDatesFilter: filter } = state;
+  const iso = ranges || filter ? toISO(date) : '';
+  if (ranges && inIntervals(ranges, iso)) return true;
+  if (!dows && !filter) return false;
+  const dayOfWeek = getDayOfWeek(date);
+  if (dows && dows.includes(dayOfWeek)) return true;
+  if (filter) {
     try {
-      if (state.disabledDatesFilter({ year: date.year, month: date.month, day: date.day, dayOfWeek })) return true;
+      return !!filter({ year: date.year, month: date.month, day: date.day, dayOfWeek, iso });
     } catch { /* Don't crash on filter errors */ }
   }
-
   return false;
 }
 
@@ -191,33 +364,15 @@ export function getDayOfWeek(date) {
 }
 
 /**
- * Get weekend day numbers for a locale.
- * Uses Intl.Locale.getWeekInfo().weekend when available, falls back to table.
+ * Get weekend day numbers (0 = Sunday) for a locale, from
+ * `Intl.Locale` week info with a small fallback table.
  */
 export function getWeekendDays(locale) {
-  try {
-    const loc = new Intl.Locale(locale);
-    let weekend;
-    if (typeof loc.getWeekInfo === 'function') {
-      weekend = loc.getWeekInfo().weekend;
-    } else if (loc.weekInfo) {
-      weekend = loc.weekInfo.weekend;
-    }
-    if (weekend && weekend.length > 0) {
-      // Intl weekend uses 1=Mon..7=Sun, convert to JS 0=Sun..6=Sat
-      return weekend.map(d => d === 7 ? 0 : d);
-    }
-  } catch { /* fallback below */ }
-
-  // Fallback: check language for known weekend patterns
+  const weekend = getWeekInfoField(locale, 'weekend');
+  // Intl weekend uses 1=Mon..7=Sun.
+  if (weekend && weekend.length) return weekend.map(d => d % 7);
   const lang = locale.split('-')[0];
-  if (lang === 'fa' || lang === 'ps') {
-    return [5, 6]; // Friday + Saturday
-  }
-  if (locale.startsWith('ar-') || lang === 'ar') {
-    return [5, 6]; // Friday + Saturday for most Arab countries
-  }
-  return [0, 6]; // Saturday + Sunday (default)
+  return lang === 'fa' || lang === 'ps' || lang === 'ar' ? [5, 6] : [0, 6];
 }
 
 /**
@@ -227,8 +382,8 @@ export function getWeekendDays(locale) {
 export function getHoveredWeekBounds(state) {
   if (state.type !== 'week' || !state.hoveredDate || state.rangeStart) return null;
   return {
-    start: startOfWeek(state.hoveredDate, state.locale),
-    end: endOfWeek(state.hoveredDate, state.locale),
+    start: startOfWeek(state.hoveredDate, state.locale, state.firstDayOfWeek),
+    end: endOfWeek(state.hoveredDate, state.locale, state.firstDayOfWeek),
   };
 }
 
@@ -280,18 +435,14 @@ export function moveFocus(state, delta) {
   // Keep keyboard focus inside min/max so it never lands on an unreachable month.
   if (state.min && newDate.compare(state.min) < 0) newDate = state.min;
   if (state.max && newDate.compare(state.max) > 0) newDate = state.max;
-  return updateState(state, {
-    focusedDate: newDate,
-    viewYear: newDate.year,
-    viewMonth: newDate.month,
-  });
+  return updateState(state, { focusedDate: newDate, ...viewOf(newDate) });
 }
 
 /**
  * Whether the visible months already touch min (prev) or max (next).
  */
 export function getNavLimits(state, monthCount = 1) {
-  const first = new CalendarDate(state.calendar, state.viewYear, state.viewMonth, 1);
+  const first = firstOfView(state);
   const last = first.add({ months: monthCount - 1 });
   return {
     prev: !!state.min && first.compare(startOfMonth(state.min)) <= 0,
@@ -304,11 +455,7 @@ export function getNavLimits(state, monthCount = 1) {
  */
 export function goToMonth(state, year, month) {
   const newFocus = state.focusedDate.set({ year, month, day: 1 });
-  return updateState(state, {
-    focusedDate: newFocus,
-    viewYear: year,
-    viewMonth: month,
-  });
+  return updateState(state, { focusedDate: newFocus, ...viewOf(newFocus) });
 }
 
 /**
@@ -317,10 +464,7 @@ export function goToMonth(state, year, month) {
 export function toISO(date) {
   if (!date) return '';
   const greg = toCalendar(date, getCalendar('gregory'));
-  const y = String(greg.year).padStart(4, '0');
-  const m = String(greg.month).padStart(2, '0');
-  const d = String(greg.day).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return `${pad(greg.year, 4)}-${pad(greg.month, 2)}-${pad(greg.day, 2)}`;
 }
 
 /**
@@ -330,20 +474,12 @@ export function parseISOToCalendar(iso, calendar) {
   if (!iso) return null;
   const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
-  const year = parseInt(match[1]);
-  const month = parseInt(match[2]);
-  const day = parseInt(match[3]);
-  // Reject obviously invalid values before construction
-  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return null;
-  try {
-    const greg = new CalendarDate(year, month, day);
-    // CalendarDate clamps invalid values instead of throwing —
-    // detect clamping by comparing input vs result
-    if (greg.year !== year || greg.month !== month || greg.day !== day) return null;
-    return toCalendar(greg, calendar);
-  } catch {
-    return null;
-  }
+  const [, year, month, day] = match.map(Number);
+  const greg = new CalendarDate(year, month, day);
+  // CalendarDate clamps invalid values (Feb 30, month 13, year 0) instead of
+  // throwing: detect clamping by comparing input vs result.
+  if (greg.year !== year || greg.month !== month || greg.day !== day) return null;
+  return toCalendar(greg, calendar);
 }
 
 /**
@@ -353,20 +489,8 @@ export function parseISOToCalendar(iso, calendar) {
  */
 export function isoWeekToCalendarDate(isoYear, weekNum, calendar) {
   if (weekNum < 1 || weekNum > 53) return null;
-  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
-  const jan4DayOfWeek = jan4.getUTCDay() || 7; // Mon=1..Sun=7
-  const mondayOfWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 86400000);
-  const targetMonday = new Date(mondayOfWeek1.getTime() + (weekNum - 1) * 7 * 86400000);
-  try {
-    const gregDate = new CalendarDate(
-      targetMonday.getUTCFullYear(),
-      targetMonday.getUTCMonth() + 1,
-      targetMonday.getUTCDate(),
-    );
-    return calendar ? toCalendar(gregDate, calendar) : gregDate;
-  } catch {
-    return null;
-  }
+  const monday = startOfWeek(new CalendarDate(isoYear, 1, 4), 'en', 'mon').add({ weeks: weekNum - 1 });
+  return calendar ? toCalendar(monday, calendar) : monday;
 }
 
 // ISO date with an optional Temporal calendar annotation: "2024-07-22[u-ca=persian]".
@@ -398,10 +522,7 @@ export function parseTypedValue(value, type, calendar) {
     if (short) {
       // The short form has no calendar tag, so it is only unambiguous for Gregorian.
       if (calendar && calendar.identifier !== 'gregory') return null;
-      const year = parseInt(short[1]);
-      const month = type === 'month' ? parseInt(short[2]) : 1;
-      if (year < 1 || month < 1 || month > 12) return null;
-      greg = new CalendarDate(year, month, 1);
+      greg = parseISOToCalendar(`${short[1]}-${short[2] || '01'}-01`, getCalendar('gregory'));
     } else {
       const iso = value.match(ISO_DATE_RE);
       greg = iso && parseISOToCalendar(iso[1], getCalendar('gregory'));
@@ -416,20 +537,23 @@ export function parseTypedValue(value, type, calendar) {
 }
 
 /**
- * Parse a min/max bound. Week pickers also accept a plain ISO date.
+ * Parse a min/max bound. An ISO week bound covers its whole locale week, so
+ * min is that week's first day and max its last; week pickers also accept a
+ * plain, day-precise ISO date.
  */
-function parseBound(value, type, calendar) {
+function parseBound(value, type, calendar, locale, firstDayOfWeek, isMax) {
   if (!value) return null;
-  if (type === 'week') return parseTypedValue(value, 'week', calendar) || parseISOToCalendar(value, calendar);
-  return parseTypedValue(value, type, calendar);
+  if (type !== 'week') return parseTypedValue(value, type, calendar);
+  const week = value.includes('W') && parseValueForType(value, type, calendar, locale, firstDayOfWeek);
+  return week ? week[isMax ? 'rangeEnd' : 'rangeStart'] : parseISOToCalendar(value, calendar);
 }
 
 /**
  * Parse a `value` string for the given picker type into selection fields.
  * Returns null when the string isn't a valid value for that type.
- * Disabled-date filtering is left to the caller.
+ * Values on disabled dates are kept; validity reports them.
  */
-export function parseValueForType(value, type, calendar, locale) {
+export function parseValueForType(value, type, calendar, locale, firstDayOfWeek) {
   const empty = { selectedDate: null, rangeStart: null, rangeEnd: null, selectedDates: [] };
   if (!value) return empty;
 
@@ -455,9 +579,16 @@ export function parseValueForType(value, type, calendar, locale) {
   }
 
   if (type === 'week') {
-    const date = parseBound(value, 'week', calendar);
+    // Through the ISO week's Thursday: its Monday can sit in the previous
+    // locale week when weeks start Tue–Thu. A plain ISO date is also accepted.
+    const monday = parseTypedValue(value, 'week', calendar);
+    const date = monday ? monday.add({ days: 3 }) : parseISOToCalendar(value, calendar);
     if (!date) return null;
-    return { ...empty, rangeStart: startOfWeek(date, locale), rangeEnd: endOfWeek(date, locale) };
+    return {
+      ...empty,
+      rangeStart: startOfWeek(date, locale, firstDayOfWeek),
+      rangeEnd: endOfWeek(date, locale, firstDayOfWeek),
+    };
   }
 
   const date = parseTypedValue(value, type, calendar);
@@ -469,12 +600,9 @@ export function parseValueForType(value, type, calendar, locale) {
  * Late December / early January can shift year (Dec 29 → W01 of next year).
  */
 export function getISOWeek(date) {
-  const native = calendarDateToNative(date);
-  const d = new Date(Date.UTC(native.getFullYear(), native.getMonth(), native.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return { year: d.getUTCFullYear(), week: Math.ceil(((d - yearStart) / 86400000 + 1) / 7) };
+  // The week belongs to the year of its Thursday.
+  const thursday = startOfWeek(toCalendar(date, getCalendar('gregory')), 'en', 'mon').add({ days: 3 });
+  return { year: thursday.year, week: Math.floor(thursday.compare(new CalendarDate(thursday.year, 1, 1)) / 7) + 1 };
 }
 
 /**
@@ -507,9 +635,9 @@ export function serializeValueForType(state) {
   }
   if (type === 'week') {
     if (!state.rangeStart || !state.rangeEnd) return '';
-    // Mid-week day: the locale week may start on Sat/Sun, which belong to the
-    // previous ISO week. rangeStart + 3 is always inside the ISO week that
-    // parses back to this same locale week.
+    // The ISO week containing the locale week's middle day. Parsing goes
+    // through that ISO week's Thursday, which always lies in this locale
+    // week, so any first day of week round-trips.
     const { year, week } = getISOWeek(state.rangeStart.add({ days: 3 }));
     return `${year}-W${pad(week, 2)}`;
   }

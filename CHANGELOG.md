@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - Unreleased
+
+Selection rules: range rules, richer disabling and a first day of week.
+
+### Breaking
+
+- **The deprecated `isDateDisabled` property alias is removed** (element,
+  type declarations and the React wrapper). Use `disabledDatesFilter`.
+
+### Changed (behavioural)
+
+- **Programmatic values are kept.** A value set through the `value`
+  attribute, `.value` or `setValue()` used to be dropped silently when it fell
+  on a disabled day. Like a native `<input>`, any parseable value is now kept
+  and displayed, and validity reports the problem: `rangeUnderflow` /
+  `rangeOverflow` for `min`/`max`, `customError` ("This date is not available")
+  for disabled days, `tooShort` / `tooLong` / `customError` for range rules.
+  `type="multiple"` keeps all of its dates. Users still can't pick invalid
+  dates. This matters with the new `disable-past`: editing a record with a
+  past date shows it instead of wiping it.
+- **A `required` range with only a start is invalid** (`valueMissing`, "Select
+  an end date"). It used to pass.
+- **An ISO week in `min`/`max` covers its whole locale week.** For Sunday- or
+  Saturday-start locales the min week's first days used to be disabled, and
+  picking that week failed its own `rangeUnderflow`.
+- Updating an attribute that re-derives state (`min`, `disabled-dates`, …)
+  keeps the visible month and view, so an availability update no longer jumps
+  the calendar back to the selection.
+
+### Added
+
+- **Range rules** for `type="range"`, counted in nights (end − start):
+  `min-nights`, `max-nights` and `exclude-disabled` (bare/`"days"`: no
+  disabled day in the range; `"nights"`: the end may be the first disabled
+  day, for hotel check-out).
+  - After the first click, days that can't end a valid range are
+    `aria-disabled` (class `range-blocked`), so the hover preview stops at
+    the first booked night; the check-out day stays selectable (class
+    `checkout-only`). Re-picking the start clears it.
+  - The limits are shown (`part="range-hint"`) and announced, and Enter on a
+    blocked day announces the reason ("Choose at least 2 nights").
+  - Presets that break the rules are disabled instead of applied.
+  - `mapDays` gets `isRangeBlocked` and `isCheckoutOnly`.
+- **`disabled-dates` accepts inclusive ranges**: `"2026-12-20/2027-01-05"`.
+  Lookups are a binary search over merged intervals.
+- **`disabled-days-of-week`**: `"5,6"` or `"fri,sat"`, combined with
+  `disable-weekends`.
+- **`disable-past` / `disable-future`**, by type: today for dates and ranges,
+  the current week, month or year for those pickers (the current month stays
+  valid for card expiry). They narrow `min`/`max`, so navigation, keyboard
+  clamping and validation messages follow. "Today" moves at midnight even on
+  an inline calendar that stays open.
+- **`first-day-of-week`**: `0`–`6` (0 = Sunday) or `sun`…`sat`. The weekday
+  header, grid, Home/End, week picker and week numbers all use it.
+- `disabledDatesFilter` and `mapDays` get the day's Gregorian `iso` date, so
+  Persian, Hijri and other pages can match backend availability directly.
+- Plural-aware labels: `nights` takes plural forms keyed by
+  `Intl.PluralRules` category (Arabic ships zero/one/two/few/many/other), with
+  native digits. New labels `rangeTooShort`, `rangeTooLong`,
+  `rangeUnavailable`, `rangeIncomplete`, `minNightsHint`, `maxNightsHint`,
+  `nights`, translated for fa, ar and he.
+- React: `minNights`, `maxNights`, `excludeDisabled` (`true` or a mode),
+  `firstDayOfWeek`, `disabledDaysOfWeek`, `disablePast`, `disableFuture`.
+- Types: `DayInfo`, `PluralLabel`, `DayOfWeekName`, `ExcludeDisabledMode`.
+- CI type-checks the declarations (`npm run typecheck`) and enforces a size
+  budget for the main bundle (`npm run size`).
+
+### Fixed
+
+- **Japanese calendar eras.** Views built from a bare year defaulted to the
+  current era, so 2018 showed as Reiwa 30 instead of Heisei 30. The visible
+  month now keeps its era, and the year view lists Gregorian years labelled in
+  their era; month and year cells carry their ISO date.
+- **Week values round-trip for every first day of week.** Parsing `YYYY-Www`
+  through its Monday landed a week early for Tuesday–Thursday starts; it now
+  goes through the ISO week's Thursday.
+- The weekday header used its own first-day table while the grid used the
+  date library's; both now use the same resolved first day.
+- Week numbers for Japanese dates before the current era were computed
+  against the wrong year.
+- React types: `IntlDatepickerProps` declared `onChange`/`onSelect`
+  incompatibly with the `HTMLAttributes` it extends, and the raw
+  `<intl-datepicker>` JSX element wasn't typed for React 19 (`React.JSX`).
+
 ## [0.3.0] - 2026-10-01
 
 Correctness, accessibility and quality release.
@@ -162,6 +246,7 @@ to 16.0 KB gzipped); npm tarball drops from 39.9 KB to ~28 KB gzipped.
 - `CHANGELOG.md` is no longer included in the published tarball; refer to
   GitHub Releases or this file in the repository.
 
+[0.4.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.0
 [0.3.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.3.0
 [0.2.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.2.0
 

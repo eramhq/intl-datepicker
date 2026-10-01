@@ -1,63 +1,59 @@
 import {
-  CalendarDate,
   startOfWeek,
+  startOfYear,
   getWeeksInMonth,
   isSameMonth,
   isSameDay,
-  toCalendar,
-  today,
 } from '@internationalized/date';
-import { getCalendar, applyNumerals } from './locale.js';
-import { isDateDisabled, isInRange, isRangeEdge, getHoveredWeekBounds } from './state.js';
-import { calendarDateToNative, resolveIntlCalendar, getTimeZone } from '../utils/common.js';
+import {
+  isDateDisabled, isInRange, isRangeEdge, getHoveredWeekBounds,
+  getRangeLimits, isRangeBlocked, firstOfView, toISO,
+} from './state.js';
+import { calendarDateToNative } from '../utils/common.js';
 
 /**
  * Generate a complete month grid for any calendar/locale.
  * Returns an array of weeks, each containing 7 day cells.
  */
 export function generateMonthGrid(state) {
-  const { calendar, viewYear, viewMonth, locale, selectedDate, selectedDates, focusedDate } = state;
+  const { locale, firstDayOfWeek, selectedDate, selectedDates, focusedDate } = state;
 
-  const firstOfMonth = new CalendarDate(calendar, viewYear, viewMonth, 1);
-  const weekStart = startOfWeek(firstOfMonth, locale);
-  const weeks = getWeeksInMonth(firstOfMonth, locale);
+  const firstOfMonth = firstOfView(state);
+  const weekStart = startOfWeek(firstOfMonth, locale, firstDayOfWeek);
+  const totalWeeks = state.fixedWeeks ? 6 : getWeeksInMonth(firstOfMonth, locale, firstDayOfWeek);
 
-  const tz = getTimeZone();
-  const todayDate = toCalendar(today(tz), calendar);
-
-  // Precompute week hover bounds once per render (avoids 84+ startOfWeek/endOfWeek calls)
+  // Computed once per render rather than per cell.
   const weekBounds = getHoveredWeekBounds(state);
+  const limits = getRangeLimits(state, weekStart, weekStart.add({ days: totalWeeks * 7 - 1 }));
 
   const grid = [];
   let current = weekStart;
 
-  const totalWeeks = state.fixedWeeks ? 6 : weeks;
   for (let w = 0; w < totalWeeks; w++) {
     const week = [];
     for (let d = 0; d < 7; d++) {
-      const isCurrentMonth = isSameMonth(current, firstOfMonth);
-      const isToday = isSameDay(current, todayDate);
       const isSelected = selectedDate
         ? isSameDay(current, selectedDate)
         : (selectedDates && selectedDates.length > 0)
           ? selectedDates.some(d => isSameDay(current, d))
           : false;
-      const isFocused = isSameDay(current, focusedDate);
-      const disabled = isDateDisabled(state, current);
-      const inRange = isInRange(state, current, weekBounds);
       const { isStart, isEnd } = isRangeEdge(state, current, weekBounds);
+      const isRangeBlockedCell = isRangeBlocked(state, current, limits);
 
       week.push({
         date: current,
         day: current.day,
-        isCurrentMonth,
-        isToday,
+        isCurrentMonth: isSameMonth(current, firstOfMonth),
+        isToday: isSameDay(current, state.today),
         isSelected,
-        isFocused,
-        disabled,
-        inRange,
+        isFocused: isSameDay(current, focusedDate),
+        disabled: isDateDisabled(state, current),
+        inRange: isInRange(state, current, weekBounds),
         isRangeStart: isStart,
         isRangeEnd: isEnd,
+        isRangeBlocked: isRangeBlockedCell,
+        // A disabled day a nights-mode range may still end on.
+        isCheckoutOnly: !isRangeBlockedCell && !!limits?.checkout && isSameDay(current, limits.checkout),
       });
 
       current = current.add({ days: 1 });
@@ -69,40 +65,17 @@ export function generateMonthGrid(state) {
 }
 
 /**
- * Get the number of months in the current year of the calendar.
- * Hebrew can have 13 months in leap years.
+ * The months of the visible year, as `{value, iso, label, date}` starting at
+ * each month's first day. Built by adding months to the year's first day,
+ * so the Japanese calendar stays in the right era across an era change.
  */
-export function getMonthCount(calendar, year) {
-  // CalendarDate constrains out-of-range months rather than throwing.
-  // If creating month 13 keeps month=13, the calendar has 13 months that year.
-  try {
-    const d = new CalendarDate(calendar, year, 13, 1);
-    return d.month === 13 ? 13 : 12;
-  } catch {
-    return 12;
-  }
-}
-
-/**
- * Get month names for a calendar year in the given locale.
- */
-export function getMonthOptions(calendarId, year, locale, numerals = null, fmt = null) {
-  const calendar = typeof calendarId === 'string' ? getCalendar(calendarId) : calendarId;
-  const count = getMonthCount(calendar, year);
-  const formatter = fmt?.month || new Intl.DateTimeFormat(applyNumerals(locale, numerals), {
-    month: 'long',
-    calendar: resolveIntlCalendar(calendarId),
-  });
+export function getMonthOptions(state, fmt) {
+  const start = startOfYear(firstOfView(state));
+  const count = state.calendar.getMonthsInYear(start);
   const months = [];
-
-  for (let m = 1; m <= count; m++) {
-    const date = new CalendarDate(calendar, year, m, 1);
-    months.push({
-      value: m,
-      label: formatter.format(calendarDateToNative(date)),
-    });
+  for (let m = 0; m < count; m++) {
+    const date = start.add({ months: m });
+    months.push({ value: date.month, iso: toISO(date), label: fmt.month.format(calendarDateToNative(date)), date });
   }
-
   return months;
 }
-

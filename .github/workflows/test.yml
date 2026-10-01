@@ -30,7 +30,11 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm test
+      - name: Type-check the published declarations
+        run: npm run typecheck
       - run: npm run build
+      - name: Check the main bundle size budget
+        run: npm run size
       - name: Verify tarball is publish-ready
         run: npm pack --dry-run
 

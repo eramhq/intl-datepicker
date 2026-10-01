@@ -114,10 +114,17 @@
 }
 
 .idp-hint,
-.idp-error {
+.idp-error,
+.idp-range-hint,
+.idp-alternate {
   font-size: 12px;
   margin-top: 4px;
   color: var(--idp-muted);
+}
+
+.idp-range-hint,
+.idp-alternate {
+  text-align: center;
 }
 
 .idp-error {
@@ -146,10 +153,6 @@
 .idp-input::placeholder {
   color: var(--idp-muted);
   opacity: 1;
-}
-
-.idp-input:read-only {
-  cursor: pointer;
 }
 
 .idp-calendar-icon {
@@ -244,8 +247,7 @@
 }
 
 .idp-header-btn {
-  font-weight: 600;
-  font-size: 15px;
+  /* font: inherit picks up the title's weight and size. */
   padding: 4px 8px;
   border-radius: 4px;
 }
@@ -257,8 +259,6 @@
 
 .idp-dropdown {
   font: inherit;
-  font-weight: 600;
-  font-size: 15px;
   color: var(--idp-text);
   background: var(--idp-bg);
   border: 1px solid var(--idp-border);
@@ -293,11 +293,6 @@
   padding: 8px 4px;
   text-align: center;
   border-radius: var(--idp-radius);
-}
-
-.idp-year-cell.current,
-.idp-month-cell.current {
-  border: 1px solid var(--idp-today-border);
 }
 
 .idp-year-cell.selected,
@@ -429,6 +424,11 @@
   border-radius: 50%;
 }
 
+/* A booked day a nights-mode range can still end on (check-out). */
+.idp-day.checkout-only:not(.range-end) {
+  color: var(--idp-muted);
+}
+
 /* --- Footer --- */
 .idp-footer {
   display: flex;
@@ -447,21 +447,6 @@
   font-size: 13px;
 }
 
-.idp-footer-btn.primary {
-  background: var(--idp-primary);
-  color: var(--idp-selected-text);
-  border-color: var(--idp-primary);
-}
-
-.idp-footer-btn.primary:hover {
-  opacity: 0.9;
-}
-
-.idp-alternate {
-  font-size: 12px;
-  color: var(--idp-muted);
-  text-align: center;
-}
 
 /* --- Live region --- */
 .idp-sr-only {
@@ -532,17 +517,13 @@
 }
 
 /* --- Week numbers --- */
-.idp-grid .idp-week-number {
+.idp-grid .idp-week-number,
+.idp-week-number-header {
   font-size: 11px;
   font-weight: normal;
   color: var(--idp-muted);
   opacity: 0.6;
   user-select: none;
-}
-
-.idp-week-number-header {
-  font-size: 11px;
-  opacity: 0.6;
 }
 
 /* --- Multi-month --- */

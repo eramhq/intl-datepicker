@@ -4,6 +4,12 @@ import { CalendarDate } from '@internationalized/date';
 
 export type DatepickerType = 'date' | 'range' | 'week' | 'multiple' | 'month' | 'year';
 
+/** A day of week for `first-day-of-week` / `disabled-days-of-week`. */
+export type DayOfWeekName = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
+
+/** `exclude-disabled` modes: `''`/`'days'` excludes every day, `'nights'` lets the end land on a disabled day. */
+export type ExcludeDisabledMode = '' | 'days' | 'nights';
+
 // ── Event detail types ──
 
 export interface DateDetail {
@@ -88,14 +94,33 @@ export interface NavigateDetail {
 
 // ── mapDays callback ──
 
+/**
+ * A day as passed to `mapDays` and `disabledDatesFilter`. `year`/`month`/`day`
+ * are in the active calendar; `iso` is the Gregorian `YYYY-MM-DD` date for
+ * matching backend data; `dayOfWeek` is 0 (Sunday) – 6 (Saturday) whatever
+ * `first-day-of-week` is.
+ */
+export interface DayInfo {
+  year: number;
+  month: number;
+  day: number;
+  dayOfWeek: number;
+  iso: string;
+}
+
 export interface MapDaysInput {
-  date: { year: number; month: number; day: number; dayOfWeek: number };
+  date: DayInfo;
   isToday: boolean;
   isSelected: boolean;
+  /** Disabled by min/max, disabled dates, weekdays or the filter (not by range rules). */
   isDisabled: boolean;
   isInRange: boolean;
   isRangeStart: boolean;
   isRangeEnd: boolean;
+  /** Can't end the pending range (too short, too long, or past a disabled day). */
+  isRangeBlocked: boolean;
+  /** A disabled day the pending `exclude-disabled="nights"` range may end on. */
+  isCheckoutOnly: boolean;
   isCurrentMonth: boolean;
 }
 
@@ -119,10 +144,17 @@ export interface RangePreset {
 
 // ── Disabled dates filter ──
 
-/** `dayOfWeek` is 0 (Sunday) – 6 (Saturday). Date fields are in the active calendar. */
-export type DisabledDatesFilterFn = (date: { year: number; month: number; day: number; dayOfWeek: number }) => boolean;
+/** Return `true` to disable a day. See {@link DayInfo}. */
+export type DisabledDatesFilterFn = (date: DayInfo) => boolean;
 
 // ── Labels API ──
+
+/**
+ * A label with plural forms keyed by `Intl.PluralRules` category, e.g.
+ * `{ one: '{n} night', other: '{n} nights' }`. `{n}` is the count in the
+ * picker's numerals.
+ */
+export type PluralLabel = Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
 
 /**
  * Localized strings used by the picker. All keys are optional in user
@@ -162,6 +194,20 @@ export interface IntlDatepickerLabels {
   dateTooEarly?: string;
   /** Validation message for values after `max`. Placeholder: `{date}`. */
   dateTooLate?: string;
+  /** Range shorter than `min-nights`. Placeholder: `{nights}`, a formatted `nights`. */
+  rangeTooShort?: string;
+  /** Range longer than `max-nights`. Placeholder: `{nights}`. */
+  rangeTooLong?: string;
+  /** Range on or across unavailable days. */
+  rangeUnavailable?: string;
+  /** A `required` range with only a start. */
+  rangeIncomplete?: string;
+  /** Range hint while a start is pending. Placeholder: `{nights}`. */
+  minNightsHint?: string;
+  /** Range hint while a start is pending. Placeholder: `{nights}`. */
+  maxNightsHint?: string;
+  /** A night count. Placeholder: `{n}`. */
+  nights?: string | PluralLabel;
 }
 
 /** Override for `parseInput`'s segment-order auto detection. */
@@ -187,8 +233,6 @@ export declare class IntlDatepickerElement extends HTMLElement {
   /** Range presets. A JSON string is also accepted. */
   presets: RangePreset[] | null;
   disabledDatesFilter: DisabledDatesFilterFn | null;
-  /** @deprecated Alias for `disabledDatesFilter`. */
-  isDateDisabled: DisabledDatesFilterFn | null;
   /** Localized strings; setting merges with locale defaults per-key. A JSON string is also accepted. */
   labels: IntlDatepickerLabels;
   /** Override the locale's default numbering system (e.g., 'latn' for Latin digits). */

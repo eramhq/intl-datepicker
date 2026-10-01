@@ -93,7 +93,17 @@ pass a `labels` object via the attribute or property API:
 
 See `IntlDatepickerLabels` in the type declarations for every key. Keys with
 placeholders: `rangeSelected` (`{start}`, `{end}`), `formatHint` and
-`invalidDate` (`{format}`, `{example}`), `dateTooEarly`/`dateTooLate` (`{date}`).
+`invalidDate` (`{format}`, `{example}`), `dateTooEarly`/`dateTooLate` (`{date}`),
+`rangeTooShort`/`rangeTooLong`/`minNightsHint`/`maxNightsHint` (`{nights}`).
+
+`nights` is a plural label: a string, or forms keyed by
+[`Intl.PluralRules`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules)
+category. `{n}` is printed in the picker's numerals:
+
+```js
+picker.labels = { nights: { one: '{n} nuit', other: '{n} nuits' } };
+// Arabic ships zero/one/two/few/many/other: "ليلة واحدة", "ليلتان", "٣ ليالٍ"
+```
 
 ## Values & time zones
 
@@ -113,6 +123,31 @@ time attached, written in ISO 8601 (Gregorian), whatever calendar the user sees:
 (or `daterange` for ranges). Don't convert it to a `Date`/timestamp — that
 is what introduces the off-by-one-day bugs. `valueAsDate` exists for
 convenience and returns local midnight.
+
+**"Today"** (`disable-past`, `disable-future`, the Today button, relative
+presets) is the date in the browser's time zone, and it moves at local
+midnight even on a calendar that stays open. A business cutoff in another time
+zone ("bookings close at 18:00 New York time") should come from the server as
+`min`.
+
+### Programmatic values are kept
+
+Like a native `<input>`, any value that parses is kept and displayed, even on
+a disabled day, outside `min`/`max` or breaking the range rules. Editing an old
+record with `disable-past` shows its past date instead of wiping it. The
+problem is reported through validity, in this order:
+
+| Problem | `validity` flag | Message label |
+|---|---|---|
+| Unreadable typed input | `badInput` | `invalidDate` / `dateUnavailable` |
+| `required` and empty | `valueMissing` | `pleaseSelectDate` |
+| `required` range with only a start | `valueMissing` | `rangeIncomplete` |
+| Before `min` / after `max` | `rangeUnderflow` / `rangeOverflow` | `dateTooEarly` / `dateTooLate` |
+| On a disabled day (or a range across one, see below) | `customError` | `dateUnavailable` / `rangeUnavailable` |
+| Range shorter than `min-nights` / longer than `max-nights` | `tooShort` / `tooLong` | `rangeTooShort` / `rangeTooLong` |
+
+Only user interaction is restricted: people can't pick an invalid date or
+range.
 
 ### Month and year values in non-Gregorian calendars
 
@@ -167,8 +202,11 @@ are likely to need:
 ```
 
 The value is the ISO week (Monday-based). The selection itself follows the
-locale's week, so `start`/`end` in the event detail are authoritative for
-Saturday- or Sunday-start locales.
+locale's week, or `first-day-of-week`, so `start`/`end` in the event detail are
+authoritative. The ISO value names the ISO week containing the selection's
+Thursday, which is what makes it round-trip for every first day: a week that
+starts on Wednesday, Dec 30 is `"…-W53"` or `"…-W01"` depending on where that
+Thursday falls. An ISO week in `min`/`max` covers its whole locale week.
 
 ### Multiple Dates
 
@@ -187,6 +225,54 @@ Saturday- or Sunday-start locales.
 ```html
 <intl-datepicker type="year"></intl-datepicker>
 ```
+
+## Range Rules
+
+For `type="range"`, length is counted in **nights**: end − start.
+
+```html
+<!-- Hotel: 2–28 nights, check-out may be on someone else's check-in day -->
+<intl-datepicker type="range" min-nights="2" max-nights="28" exclude-disabled="nights"
+  disabled-dates='["2026-10-20/2026-10-22"]' disable-past></intl-datepicker>
+```
+
+| Attribute | Meaning |
+|---|---|
+| `min-nights` | Shortest range. Unset or `0` allows start = end (one day); `1` forbids it |
+| `max-nights` | Longest range |
+| `exclude-disabled` (bare, or `"days"`) | No disabled day anywhere in `[start, end]` |
+| `exclude-disabled="nights"` | No disabled day in `[start, end − 1]`: the **end may be the first disabled day** |
+
+Without `exclude-disabled`, a range may span disabled days (weekends, holidays
+in a leave request); only its start and end must be selectable.
+
+| Booked nights 12–13 | days | nights |
+|---|---|---|
+| 10 → 11 | ✓ | ✓ |
+| 10 → 12 (check out the morning someone checks in) | ✗ | ✓ |
+| 10 → 14 | ✗ | ✗ |
+| 12 → 14 (check in on a booked night) | ✗ | ✗ |
+
+After the first click:
+
+- Days that can't end a valid range get `aria-disabled` and are skipped by the
+  hover preview, which therefore stops at the first booked night. In
+  `"nights"` mode the first disabled day after the start stays selectable as
+  a check-out day.
+- The start itself is never blocked: clicking it again (or Enter) clears it
+  when a one-day range isn't allowed.
+- The footer shows the limits (`part="range-hint"`, e.g. "Minimum stay:
+  2 nights · Maximum: 28 nights"), and the same text is announced.
+- Enter on a blocked day selects nothing and announces why ("Choose at least
+  2 nights").
+- Ranges are evaluated in sorted order, so clicking before the start swaps them.
+- `mapDays` receives `isRangeBlocked` and `isCheckoutOnly` for styling, e.g.
+  a strike-through on booked days.
+
+Presets that resolve to a range breaking these rules are disabled, never
+shortened to fit. Days force-disabled by `mapDays` don't count for
+`exclude-disabled`; use `disabled-dates` or `disabledDatesFilter` for
+availability. "Check-in only" days aren't supported.
 
 ## Attributes
 
@@ -207,8 +293,15 @@ Saturday- or Sunday-start locales.
 | `readonly` | `boolean` | Read-only input |
 | `required` | `boolean` | Mark as required for form validation |
 | `show-alternate` | `boolean` | Show the Gregorian equivalent below the calendar |
-| `disabled-dates` | `string` | JSON array of ISO dates to disable, e.g. `'["2026-01-01","2026-12-25"]'` |
+| `disabled-dates` | `string` | JSON array of ISO dates and inclusive ranges to disable, e.g. `'["2026-01-01","2026-12-20/2027-01-05"]'` |
 | `disable-weekends` | `boolean` | Disable the locale's weekend days (Sat–Sun in `en-US`, Fri in `fa-IR`, Fri–Sat in `ar-SA`) |
+| `disabled-days-of-week` | `string` | Weekdays to disable: `"5,6"` (0 = Sunday) or `"fri,sat"`. Combines with `disable-weekends` |
+| `disable-past` | `boolean` | Disable days before today; for `week`/`month`/`year`, periods before the current one |
+| `disable-future` | `boolean` | Disable days after today; for `week`/`month`/`year`, periods after the current one |
+| `first-day-of-week` | `string` | `0`–`6` (0 = Sunday) or `sun`…`sat`. Default: the locale's |
+| `min-nights` | `number` | Range: minimum nights (see [Range Rules](#range-rules)) |
+| `max-nights` | `number` | Range: maximum nights |
+| `exclude-disabled` | `string` | Range: no disabled days inside; `"nights"` allows check-out on one |
 | `date-separator` | `string` | Separator for multiple date display. Default: `", "` |
 | `max-dates` | `number` | Max dates selectable in `multiple` mode |
 | `sort-dates` | `boolean` | Auto-sort selected dates in `multiple` mode |
@@ -302,10 +395,14 @@ picker.mapDays = ({ date, isToday, isDisabled }) => {
   if (date.dayOfWeek === 5) return { className: 'friday', content: '🎉' };
 };
 
-picker.disabledDatesFilter = ({ year, month, day, dayOfWeek }) => {
+picker.disabledDatesFilter = ({ year, month, day, dayOfWeek, iso }) => {
   return day === 13; // disable all 13ths
 };
 ```
+
+The filter and `mapDays` get the day in the active calendar (`year`, `month`,
+`day`), its Gregorian `iso` date (`"2026-03-21"`) for matching backend data,
+and `dayOfWeek` from 0 (Sunday) to 6, whatever `first-day-of-week` is.
 
 `presets` and `labels` accept either an array/object or the same JSON string
 as the attribute.
@@ -334,7 +431,9 @@ Preset `value` is `start/end`, each one of:
 
 Months and years are computed **in the active calendar**: with
 `calendar="persian"`, "This month" is the current Persian month.
-Results are clamped to `min`/`max`.
+Results are clamped to `min`/`max` (so "This month" with `disable-future` ends
+today). A preset that still breaks the [range rules](#range-rules), such as
+"Last 90 days" with `max-nights="30"`, is disabled.
 
 Presets can also be set via JavaScript:
 
@@ -350,8 +449,9 @@ picker.presets = [
 ```js
 picker.mapDays = (info) => {
   // info: { date, isToday, isSelected, isDisabled, isInRange,
-  //         isRangeStart, isRangeEnd, isCurrentMonth }
-  // date: { year, month, day, dayOfWeek }  (active calendar)
+  //         isRangeStart, isRangeEnd, isRangeBlocked, isCheckoutOnly,
+  //         isCurrentMonth }
+  // date: { year, month, day, dayOfWeek, iso }  (active calendar + ISO)
 
   return {
     className: 'my-class',     // extra CSS class
@@ -369,12 +469,62 @@ picker.mapDays = (info) => {
 ### Hotel or rental booking
 
 ```html
-<intl-datepicker type="range" name="stay" months="2" min="2026-10-01"
-  disabled-dates='["2026-12-24","2026-12-25"]' required></intl-datepicker>
+<intl-datepicker type="range" name="stay" months="2" required disable-past
+  min-nights="1" max-nights="28" exclude-disabled="nights"
+  disabled-dates='["2026-10-20/2026-10-22","2026-11-03"]'></intl-datepicker>
 ```
+
+`disabled-dates` lists **booked nights**. Check-in can't be on one; check-out
+can be on the first one, since that guest leaves in the morning. Once a
+check-in is picked, days past the next booked night are blocked and the
+minimum and maximum stay are shown. A value with only a check-in fails
+`required` ("Select an end date").
 
 Store `start` and `end` from the value (`"2026-10-03/2026-10-07"`) as two
 `DATE` columns. Nights = days between them; no time zone math involved.
+
+### Availability from an API
+
+Load the visible months' availability as the user navigates. A pending
+check-in survives attribute updates, and the filter gets the Gregorian `iso`
+date, so a Persian or Hijri page matches the same backend data:
+
+```js
+const picker = document.querySelector('intl-datepicker');
+const booked = new Set();
+
+async function loadAvailability() {
+  const res = await fetch('/api/booked-nights'); // ["2026-10-20", …]
+  for (const iso of await res.json()) booked.add(iso);
+  // Assigning the filter re-renders with the new data.
+  picker.disabledDatesFilter = ({ iso }) => booked.has(iso);
+}
+
+loadAvailability();
+picker.addEventListener('intl-navigate', loadAvailability);
+```
+
+`intl-navigate`'s `year`/`month` are in the active calendar; if your API takes
+a date window, request a generous one around today.
+
+Or set ranges directly: `picker.setAttribute('disabled-dates', JSON.stringify(['2026-10-20/2026-10-22']))`.
+
+### Leave or vacation request
+
+```html
+<intl-datepicker type="range" name="leave" disable-weekends
+  disabled-dates='["2026-12-24/2026-12-26","2027-01-01"]'></intl-datepicker>
+```
+
+No `exclude-disabled`: the request may span weekends and holidays, but can't
+start or end on one.
+
+### Clinic appointment
+
+```html
+<intl-datepicker name="visit" disable-past disabled-days-of-week="fri"
+  disabled-dates='["2026-12-20/2027-01-05"]'></intl-datepicker>
+```
 
 ### Payroll month (Persian, Hijri, …)
 
@@ -392,6 +542,12 @@ picker.addEventListener('intl-change', ({ detail }) => {
 ### Reports with presets
 
 ```html
+<intl-datepicker type="range" max-nights="365" disable-future
+  presets='[{"label":"Last 30 days","value":"-29d/today"},{"label":"This year","value":"yearStart/today"}]'>
+</intl-datepicker>
+```
+
+```html
 <intl-datepicker type="range" calendar="persian" locale="fa-IR" max="2026-12-31"
   presets='[{"label":"این ماه","value":"monthStart/today"},{"label":"ماه قبل","value":"prevMonthStart/prevMonthEnd"}]'>
 </intl-datepicker>
@@ -405,8 +561,11 @@ year and month dropdowns:
 ```html
 <label for="dob">Date of birth</label>
 <intl-datepicker id="dob" name="dob" allow-input caption-layout="dropdown"
-  min="1900-01-01" max="2026-12-31" required></intl-datepicker>
+  min="1900-01-01" disable-future required></intl-datepicker>
 ```
+
+For a card expiry, `<intl-datepicker type="month" disable-past>` keeps the
+current month valid.
 
 `allow-input` shows the expected format under the field (e.g. `Format: MM/DD/YYYY`),
 accepts native digits and compact entry (`06171990`), and shows a persistent
@@ -483,6 +642,7 @@ intl-datepicker::part(header) { background: #f0f0f0; }
 | `clear-btn` | "Clear" button |
 | `alternate` | Gregorian alternate display |
 | `presets` | Presets sidebar |
+| `range-hint` | Minimum/maximum nights while a range start is pending |
 
 A [Custom Elements Manifest](https://github.com/webcomponents/custom-elements-manifest)
 ships at `dist/custom-elements.json` (linked from `package.json`), so editors
@@ -508,9 +668,11 @@ Bind the picker to any existing input:
 ```
 
 The component participates in native form submission, validation (`required`,
-`min`/`max`, unreadable typed input), `form.reset()`, and `<fieldset disabled>`.
-Validation messages come from the `labels` (`pleaseSelectDate`,
-`dateTooEarly`, `dateTooLate`) and are localized for fa, ar and he.
+`min`/`max`, disabled days, range rules, unreadable typed input),
+`form.reset()`, and `<fieldset disabled>`. See
+[Programmatic values are kept](#programmatic-values-are-kept) for the validity
+flags. Validation messages come from the `labels` and are localized for fa, ar
+and he.
 
 ## Accessibility
 
@@ -520,7 +682,9 @@ Validation messages come from the `labels` (`pleaseSelectDate`,
 - Month changes from the navigation buttons and every selection are announced
   through one polite live region.
 - A `<label for>` or `aria-label` on `<intl-datepicker>` names the inner input.
-- Navigation buttons at `min`/`max` stay focusable with `aria-disabled`.
+- Navigation buttons at `min`/`max` stay focusable with `aria-disabled`, and
+  so do disabled days: Enter on one announces why it can't be picked.
+- While a range start is pending, its length limits are announced with it.
 - Focus returns to the input when the popup closes.
 - Selected, today and focus states stay visible in Windows high-contrast
   (`forced-colors`), and animations respect `prefers-reduced-motion`.
@@ -533,7 +697,7 @@ Validation messages come from the `labels` (`pleaseSelectDate`,
 | `Enter` | Input (`allow-input`) | Read the typed date |
 | `←` `→` | Days | Previous / next day (mirrored in RTL locales) |
 | `↑` `↓` | Days | Same day in the previous / next week |
-| `Home` / `End` | Days | First / last day of the week (locale's first day) |
+| `Home` / `End` | Days | First / last day of the week (`first-day-of-week`, else the locale's) |
 | `PageUp` / `PageDown` | Days | Previous / next month |
 | `Shift+PageUp` / `Shift+PageDown` | Days | Previous / next year |
 | `Enter` / `Space` | Days, months, years | Select |
@@ -651,7 +815,9 @@ import type {
   MapDaysFn,
   RangePreset,
   DisabledDatesFilterFn,
+  DayInfo,
   IntlDatepickerLabels,
+  PluralLabel,
 } from 'intl-datepicker';
 
 // React

@@ -26,6 +26,14 @@ export const LABELS_FA = Object.freeze({
   pleaseSelectDate: 'لطفاً یک تاریخ انتخاب کنید',
   dateTooEarly: 'تاریخ باید {date} یا بعد از آن باشد',
   dateTooLate: 'تاریخ باید {date} یا قبل از آن باشد',
+  rangeTooShort: 'حداقل {nights} انتخاب کنید',
+  rangeTooLong: 'حداکثر {nights} انتخاب کنید',
+  rangeUnavailable: 'این بازه شامل تاریخ‌های غیرقابل‌انتخاب است',
+  rangeIncomplete: 'تاریخ پایان را انتخاب کنید',
+  minNightsHint: 'حداقل اقامت: {nights}',
+  maxNightsHint: 'حداکثر: {nights}',
+  // Persian nouns stay singular after a number.
+  nights: '{n} شب',
 });
 
 registerLabels('fa', LABELS_FA);

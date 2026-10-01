@@ -26,6 +26,13 @@ export const LABELS_HE = Object.freeze({
   pleaseSelectDate: 'אנא בחר תאריך',
   dateTooEarly: 'התאריך חייב להיות {date} או מאוחר יותר',
   dateTooLate: 'התאריך חייב להיות {date} או מוקדם יותר',
+  rangeTooShort: 'יש לבחור לפחות {nights}',
+  rangeTooLong: 'יש לבחור עד {nights}',
+  rangeUnavailable: 'הטווח כולל תאריכים לא זמינים',
+  rangeIncomplete: 'יש לבחור תאריך סיום',
+  minNightsHint: 'שהייה מינימלית: {nights}',
+  maxNightsHint: 'מקסימום: {nights}',
+  nights: { one: 'לילה אחד', two: 'שני לילות', other: '{n} לילות' },
 });
 
 registerLabels('he', LABELS_HE);

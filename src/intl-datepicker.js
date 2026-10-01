@@ -1,18 +1,18 @@
-import { toCalendar, today, CalendarDate, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
+import { toCalendar, startOfWeek, endOfWeek, isSameDay } from '@internationalized/date';
 import { getStyles, getStylesText, calendarIcon, clearIcon } from './styles.js';
 import { resolveLocale, isRTL, getMinimalDays, isCalendarRegistered } from './core/locale.js';
-import { calendarDateToNative, getTimeZone, resolveRelativeDate, escAttr, parseJSONAttr } from './utils/common.js';
+import { calendarDateToNative, resolveRelativeDate, escAttr, parseJSONAttr } from './utils/common.js';
 import {
-  createState, updateState, selectDate, moveFocus,
-  goToMonth, toISO, isDateDisabled, isInRange, isRangeEdge, getHoveredWeekBounds,
-  parseTypedValue, parseValueForType, serializeValueForType, getPeriodBounds, getNavLimits,
+  createState, updateState, selectDate, moveFocus, refreshToday, viewOf, firstOfView,
+  goToMonth, toISO, isDateDisabled, isInRange, isRangeEdge, getHoveredWeekBounds, rangeError, hasPendingStart,
+  parseTypedValue, parseValueForType, parseISOToCalendar, serializeValueForType, getPeriodBounds, getNavLimits,
 } from './core/state.js';
-import { generateMonthGrid, getMonthCount } from './core/calendar-grid.js';
+import { generateMonthGrid } from './core/calendar-grid.js';
 import { renderHeader, renderNavButton, renderYearGrid, renderMonthGrid as renderMonthPicker } from './core/calendar-header.js';
-import { createFormatters, formatDateShort, formatRange, formatMonthYear, getGregorianEquivalent } from './utils/format.js';
+import { formatDateShort, formatRange, formatMonthYear, getGregorianEquivalent } from './utils/format.js';
 import { positionCalendar } from './core/positioning.js';
 import { parseInput, getLocaleSegmentOrder } from './core/date-input.js';
-import { resolveLabels, fillLabel } from './core/labels.js';
+import { resolveLabels, fillLabel, fillPlural } from './core/labels.js';
 
 const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -63,8 +63,15 @@ const HTMLElementBase = typeof HTMLElement !== 'undefined' ? HTMLElement : class
  * @attr {boolean} readonly - Show the value but prevent changes.
  * @attr {boolean} required - Require a value for form submission.
  * @attr {boolean} show-alternate - Show the Gregorian equivalent under the calendar.
- * @attr {string} disabled-dates - JSON array of ISO dates that can't be selected.
+ * @attr {string} disabled-dates - JSON array of ISO dates (`"2026-01-01"`) or inclusive ranges (`"2026-01-01/2026-01-10"`) that can't be selected.
  * @attr {boolean} disable-weekends - Disable the locale's weekend days.
+ * @attr {string} disabled-days-of-week - Weekdays that can't be selected: `"5,6"` (0 = Sunday) or `"fri,sat"`.
+ * @attr {boolean} disable-past - Disable days before today (this week / month / year for those types).
+ * @attr {boolean} disable-future - Disable days after today (this week / month / year for those types).
+ * @attr {string} first-day-of-week - First day of the week: `0`–`6` (0 = Sunday) or `sun`…`sat`. Defaults to the locale's.
+ * @attr {number} min-nights - Minimum range length in nights (end − start) for `type="range"`. `1` forbids a same-day range.
+ * @attr {number} max-nights - Maximum range length in nights for `type="range"`.
+ * @attr {''|'days'|'nights'} exclude-disabled - Ranges can't contain disabled days. `"nights"` lets the end land on the first disabled day (hotel check-out).
  * @attr {string} date-separator - Display separator for `type="multiple"`. Default `, `.
  * @attr {number} max-dates - Maximum selections for `type="multiple"`.
  * @attr {boolean} sort-dates - Keep `type="multiple"` selections sorted.
@@ -107,6 +114,7 @@ const HTMLElementBase = typeof HTMLElement !== 'undefined' ? HTMLElement : class
  * @csspart clear-btn - Clear button in the footer.
  * @csspart alternate - Gregorian equivalent line (`show-alternate`).
  * @csspart presets - Range presets sidebar.
+ * @csspart range-hint - Minimum/maximum length shown while a range start is pending.
  *
  * @cssprop --idp-primary - Accent color.
  * @cssprop --idp-bg - Panel and input background.
@@ -143,6 +151,8 @@ class IntlDatepicker extends HTMLElementBase {
       'show-week-numbers', 'hide-outside-days', 'allow-input',
       'labels', 'date-format',
       'caption-layout', 'fixed-weeks',
+      'first-day-of-week', 'disabled-days-of-week', 'disable-past', 'disable-future',
+      'min-nights', 'max-nights', 'exclude-disabled',
     ];
   }
 
@@ -228,14 +238,33 @@ class IntlDatepicker extends HTMLElementBase {
       case 'min':
       case 'max':
       case 'disabled-dates':
-      case 'disable-weekends': {
-        // Re-derive state but keep the current selection and open state.
+      case 'disable-weekends':
+      case 'first-day-of-week':
+      case 'disabled-days-of-week':
+      case 'disable-past':
+      case 'disable-future':
+      case 'min-nights':
+      case 'max-nights':
+      case 'exclude-disabled': {
+        // Re-derive state but keep the current selection (including a pending
+        // range start), the open state and, for the same type, the visible
+        // month and view, so an availability update doesn't jump the calendar.
         // Month/year selections carry over as a plain ISO date, which snaps
         // to the right period in whatever calendar is now active.
-        const { isOpen, type, selectedDate } = this._state;
+        const prev = this._state;
+        const { type, selectedDate } = prev;
         const keep = (type === 'month' || type === 'year') && selectedDate ? toISO(selectedDate) : this.value;
+        const view = this._view;
         this._initState(keep);
-        if (isOpen) this._state = updateState(this._state, { isOpen });
+        const cal = this._state.calendar;
+        this._state = updateState(this._state, { isOpen: prev.isOpen });
+        if (this._state.type === type) {
+          this._view = view;
+          this._state = updateState(this._state, {
+            focusedDate: toCalendar(prev.focusedDate, cal),
+            ...viewOf(toCalendar(firstOfView(prev), cal)),
+          });
+        }
         this._updateDir();
         this._render();
         this._updateFormValue();
@@ -359,16 +388,13 @@ class IntlDatepicker extends HTMLElementBase {
     if (!s) return '';
     const fmt = this._fmt;
     if (s.type === 'range' || s.type === 'week') {
-      return formatRange(s.rangeStart, s.rangeEnd, s.locale, s.calendarId, s.numerals, fmt);
+      return formatRange(s.rangeStart, s.rangeEnd, fmt);
     }
     if (s.type === 'multiple') {
       const sep = this.getAttribute('date-separator') || ', ';
-      return (s.selectedDates || []).map(d => formatDateShort(d, s.locale, s.calendarId, s.numerals, fmt)).join(sep);
+      return (s.selectedDates || []).map(d => formatDateShort(d, fmt)).join(sep);
     }
-    if (!s.selectedDate) return '';
-    if (s.type === 'month') return this._formatMonth(s.selectedDate);
-    if (s.type === 'year') return this._formatYear(s.selectedDate);
-    return formatDateShort(s.selectedDate, s.locale, s.calendarId, s.numerals, fmt);
+    return s.selectedDate ? this._formatForType(s.selectedDate) : '';
   }
 
   get rangeStart() {
@@ -480,9 +506,6 @@ class IntlDatepicker extends HTMLElementBase {
     }
   }
 
-  get isDateDisabled() { return this.disabledDatesFilter; }
-  set isDateDisabled(fn) { this.disabledDatesFilter = fn; }
-
   get labels() {
     return this._state ? this._state.labels : resolveLabels('en', null);
   }
@@ -586,11 +609,8 @@ class IntlDatepicker extends HTMLElementBase {
 
     this._userLabelsFromAttr = parseJSONAttr(this.getAttribute('labels'), isPlainObject);
     const userLabels = this._mergedUserLabels();
-
-    // Formatters depend only on locale/calendar/numerals: build once here
-    // instead of per cell / per render.
-    this._fmt = createFormatters(locale, calendarId, numerals);
     this._minimalDays = getMinimalDays(locale);
+    const has = (attr) => this.hasAttribute(attr);
 
     const value = valueOverride ?? this.getAttribute('value');
     this._state = createState({
@@ -604,14 +624,23 @@ class IntlDatepicker extends HTMLElementBase {
       inline: this.hasAttribute('inline'),
       disabledDates,
       disabledDatesFilter: this._disabledDatesFilter || null,
-      disableWeekends: this.hasAttribute('disable-weekends'),
+      disableWeekends: has('disable-weekends'),
+      disabledDaysOfWeek: this.getAttribute('disabled-days-of-week'),
+      disablePast: has('disable-past'),
+      disableFuture: has('disable-future'),
+      firstDayOfWeek: this.getAttribute('first-day-of-week'),
+      minNights: this.getAttribute('min-nights'),
+      maxNights: this.getAttribute('max-nights'),
+      excludeDisabled: this.getAttribute('exclude-disabled'),
       isRTL: isRTL(locale),
       maxDates,
-      sortDates: this.hasAttribute('sort-dates'),
-      fixedWeeks: this.hasAttribute('fixed-weeks'),
+      sortDates: has('sort-dates'),
+      fixedWeeks: has('fixed-weeks'),
       labels: resolveLabels(locale, userLabels),
     });
-    this._state._fmt = this._fmt;
+    // Formatters depend only on locale/calendar/numerals/first day: built
+    // once per state instead of per cell / per render.
+    this._fmt = this._state._fmt;
     // Inline month/year pickers never go through _openCalendar.
     this._view = this._initialView();
     if (value && !this.value && valueOverride === undefined) this._warnBadValue(value);
@@ -634,28 +663,24 @@ class IntlDatepicker extends HTMLElementBase {
     }
     const s = this._state;
     const prev = this.value;
-    const parsed = parseValueForType(raw || '', s.type, s.calendar, s.locale);
+    const parsed = parseValueForType(raw || '', s.type, s.calendar, s.locale, s.firstDayOfWeek);
     if (!parsed) {
       this._warnBadValue(raw);
       return;
     }
 
+    // Like a native <input>, a parseable value is kept even on a disabled or
+    // out-of-range date: validity reports it instead of the value vanishing.
     let { selectedDate, rangeStart, rangeEnd, selectedDates } = parsed;
-    const disabled = (d) => d && isDateDisabled(s, d);
     if (s.type === 'multiple') {
       // Keep the first max-dates entries as given, then sort.
-      selectedDates = selectedDates.filter(d => !disabled(d));
       if (s.maxDates) selectedDates = selectedDates.slice(0, s.maxDates);
       if (s.sortDates) selectedDates.sort((a, b) => a.compare(b));
-    } else if (s.type === 'range') {
-      if (disabled(rangeStart) || disabled(rangeEnd)) return;
-    } else if (s.type === 'date' && disabled(selectedDate)) {
-      return;
     }
 
     const changes = { selectedDate, rangeStart, rangeEnd, selectedDates, hoveredDate: null };
     const focus = selectedDate || rangeStart || selectedDates[0];
-    if (focus) Object.assign(changes, { focusedDate: focus, viewYear: focus.year, viewMonth: focus.month });
+    if (focus) Object.assign(changes, { focusedDate: focus, ...viewOf(focus) });
     this._state = updateState(s, changes);
     this._inputError = '';
 
@@ -678,33 +703,71 @@ class IntlDatepicker extends HTMLElementBase {
     // The validity anchor must live in this element's (shadow-including) tree.
     const anchor = this._slottedInput
       || (this._externalInput || this.hasAttribute('for') ? undefined : this._inputEl);
-    const { labels, min, max } = this._state;
+    const s = this._state;
+    const { labels, min, max, type } = s;
+    const fail = (flag, message) => this._internals.setValidity({ [flag]: true }, message, anchor);
 
-    if (this._inputError) {
-      this._internals.setValidity({ badInput: true }, this._inputError, anchor);
-      return;
+    if (this._inputError) return fail('badInput', this._inputError);
+
+    if (this.hasAttribute('required')) {
+      if (!val) return fail('valueMissing', labels.pleaseSelectDate);
+      // A range with only a start isn't a complete value.
+      if (type === 'range' && !s.rangeEnd) return fail('valueMissing', labels.rangeIncomplete);
     }
 
-    if (this.hasAttribute('required') && !val) {
-      this._internals.setValidity({ valueMissing: true }, labels.pleaseSelectDate, anchor);
-      return;
+    const dates = this._getValueDates();
+    if (min && dates.some(d => d.compare(min) < 0)) {
+      return fail('rangeUnderflow', fillLabel(labels.dateTooEarly, { date: this._formatForType(min) }));
+    }
+    if (max && dates.some(d => d.compare(max) > 0)) {
+      return fail('rangeOverflow', fillLabel(labels.dateTooLate, { date: this._formatForType(max) }));
     }
 
-    if (val && (min || max)) {
-      const dates = this._getValueDates();
-      if (min && dates.some(d => d.compare(min) < 0)) {
-        this._internals.setValidity({ rangeUnderflow: true },
-          fillLabel(labels.dateTooEarly, { date: this._formatForType(min) }), anchor);
-        return;
-      }
-      if (max && dates.some(d => d.compare(max) > 0)) {
-        this._internals.setValidity({ rangeOverflow: true },
-          fillLabel(labels.dateTooLate, { date: this._formatForType(max) }), anchor);
-        return;
-      }
+    // Per-day rules apply to dates; week/month/year pick whole periods.
+    const error = type === 'range' && s.rangeEnd
+      ? rangeError(s, s.rangeStart, s.rangeEnd)
+      : (type === 'date' || type === 'multiple' || type === 'range') && dates.some(d => isDateDisabled(s, d)) && 'unavailable';
+    if (error) {
+      return fail(error === 'short' ? 'tooShort' : error === 'long' ? 'tooLong' : 'customError', this._reason(error));
     }
 
     this._internals.setValidity({});
+  }
+
+  // Message for a rangeError() reason, or a single unavailable date.
+  _reason(error) {
+    const { labels, minNights, maxNights, type } = this._state;
+    if (error === 'short' || error === 'long') {
+      return fillLabel(error === 'short' ? labels.rangeTooShort : labels.rangeTooLong, {
+        nights: this._formatNights(error === 'short' ? minNights : maxNights),
+      });
+    }
+    return type === 'range' ? labels.rangeUnavailable : labels.dateUnavailable;
+  }
+
+  // Why `date` can't be picked now: a message, or '' when it can.
+  _refusal(date) {
+    const s = this._state;
+    if (hasPendingStart(s)) {
+      const error = rangeError(s, s.rangeStart, date);
+      return error && !isSameDay(date, s.rangeStart) ? this._reason(error) : '';
+    }
+    return this._isSelectable(date) ? '' : this._state.labels.dateUnavailable;
+  }
+
+  _formatNights(n) {
+    return fillPlural(this._state.labels.nights, n, this._fmt);
+  }
+
+  // "Minimum stay: 2 nights · Maximum: 28 nights" while a range start is
+  // pending, or ''.
+  _rangeHint() {
+    const { minNights, maxNights, labels } = this._state;
+    if (!hasPendingStart(this._state)) return '';
+    const parts = [];
+    if (minNights) parts.push(fillLabel(labels.minNightsHint, { nights: this._formatNights(minNights) }));
+    if (maxNights != null) parts.push(fillLabel(labels.maxNightsHint, { nights: this._formatNights(maxNights) }));
+    return parts.join(' · ');
   }
 
   _getValueDates() {
@@ -750,6 +813,7 @@ class IntlDatepicker extends HTMLElementBase {
 
   _render() {
     if (!this._state) return;
+    this._refreshToday();
     this._ensureSkeleton();
     this._syncInput();
     this._renderCalendar();
@@ -786,6 +850,17 @@ class IntlDatepicker extends HTMLElementBase {
     this._toggleAttr(input, 'aria-describedby', describedBy || null);
   }
 
+  // A calendar left open past midnight: move "today" and the bounds that
+  // disable-past/-future derive from it. Returns whether anything changed.
+  _refreshToday() {
+    const prev = this._state;
+    this._state = refreshToday(prev);
+    if (this._state === prev) return false;
+    // The bounds moved, so the current value may have become invalid.
+    this._updateFormValue();
+    return true;
+  }
+
   _toggleAttr(el, name, value) {
     if (value == null) el.removeAttribute(name);
     else if (el.getAttribute(name) !== value) el.setAttribute(name, value);
@@ -816,8 +891,7 @@ class IntlDatepicker extends HTMLElementBase {
 
   _getInputFormat() {
     const s = this._state;
-    const sample = toCalendar(today(getTimeZone()), s.calendar);
-    const sampleDate = sample.set({ day: Math.min(25, s.calendar.getDaysInMonth(sample)) });
+    const sampleDate = s.today.set({ day: Math.min(25, s.calendar.getDaysInMonth(s.today)) });
     const tokens = { year: 'YYYY', month: 'MM', day: 'DD' };
     let format = '';
     const forced = this.getAttribute('date-format');
@@ -832,7 +906,7 @@ class IntlDatepicker extends HTMLElementBase {
     } catch {
       format = 'YYYY/MM/DD';
     }
-    return { format, example: formatDateShort(sampleDate, s.locale, s.calendarId, s.numerals, this._fmt) };
+    return { format, example: formatDateShort(sampleDate, this._fmt) };
   }
 
   _renderCalendar() {
@@ -901,7 +975,7 @@ class IntlDatepicker extends HTMLElementBase {
     let inner = '<div class="idp-months-container">';
     for (let i = 0; i < monthCount; i++) {
       const panelState = this._getOffsetState(i);
-      const title = formatMonthYear(panelState.viewYear, panelState.viewMonth, panelState.locale, panelState.calendarId, panelState.numerals, this._fmt);
+      const title = formatMonthYear(firstOfView(panelState), this._fmt);
       const placeholder = '<span class="idp-nav-btn" style="visibility:hidden"></span>';
       inner += `<div class="idp-month-panel">
         <div class="idp-header" part="header" role="group">
@@ -919,7 +993,8 @@ class IntlDatepicker extends HTMLElementBase {
 
   _renderFooter() {
     const { labels, selectedDate } = this._state;
-    let html = `
+    const hint = this._rangeHint();
+    let html = `${hint ? `<div class="idp-range-hint" part="range-hint">${escAttr(hint)}</div>` : ''}
       <div class="idp-footer" part="footer">
         <button class="idp-footer-btn" part="today-btn" data-action="today" type="button">${escAttr(labels.today)}</button>
         <button class="idp-footer-btn" part="clear-btn" data-action="clear" type="button">${escAttr(labels.clear)}</button>
@@ -927,7 +1002,7 @@ class IntlDatepicker extends HTMLElementBase {
     `;
 
     if (this.hasAttribute('show-alternate') && selectedDate) {
-      const alt = getGregorianEquivalent(selectedDate, this._state.locale, this._state.numerals);
+      const alt = getGregorianEquivalent(selectedDate, this._fmt);
       html += `<div class="idp-alternate" part="alternate">${alt}</div>`;
     }
 
@@ -952,20 +1027,24 @@ class IntlDatepicker extends HTMLElementBase {
       html += `<button class="idp-preset-btn${isActive ? ' active' : ''}"
         data-action="apply-preset"
         data-preset-value="${escAttr(preset.value)}"
-        ${isActive ? 'aria-pressed="true"' : 'aria-pressed="false"'}
+        aria-pressed="${isActive}"${resolved ? '' : ' aria-disabled="true"'}
         type="button">${escAttr(preset.label)}</button>`;
     }
     html += '</div>';
     return html;
   }
 
+  // The preset's range, or null when it doesn't resolve or breaks the range
+  // rules (a preset is never clamped to fit max-nights).
   _resolvePreset(presetValue) {
     try {
       const [startExpr, endExpr] = presetValue.split('/');
-      const { calendar, min, max } = this._state;
-      const start = resolveRelativeDate(startExpr, calendar, min, max);
-      const end = resolveRelativeDate(endExpr, calendar, min, max);
-      return start && end ? { start, end } : null;
+      const s = this._state;
+      const start = resolveRelativeDate(startExpr, s.calendar, s.min, s.max);
+      const end = resolveRelativeDate(endExpr, s.calendar, s.min, s.max);
+      if (!start || !end) return null;
+      const [a, b] = start.compare(end) <= 0 ? [start, end] : [end, start];
+      return rangeError(s, a, b) ? null : { start: a, end: b };
     } catch {
       return null;
     }
@@ -981,8 +1060,7 @@ class IntlDatepicker extends HTMLElementBase {
       rangeEnd: end,
       hoveredDate: null,
       focusedDate: start,
-      viewYear: start.year,
-      viewMonth: start.month,
+      ...viewOf(start),
     });
 
     this._render();
@@ -1004,9 +1082,7 @@ class IntlDatepicker extends HTMLElementBase {
 
   _getOffsetState(offset) {
     if (offset === 0) return this._state;
-    const next = new CalendarDate(this._state.calendar, this._state.viewYear, this._state.viewMonth, 1)
-      .add({ months: offset });
-    return updateState(this._state, { viewYear: next.year, viewMonth: next.month });
+    return updateState(this._state, viewOf(firstOfView(this._state, offset)));
   }
 
   _renderDayGrid(state, titleId) {
@@ -1041,13 +1117,21 @@ class IntlDatepicker extends HTMLElementBase {
         if (mapDaysFn) {
           try {
             mapped = mapDaysFn({
-              date: { year: cell.date.year, month: cell.date.month, day: cell.date.day, dayOfWeek: calendarDateToNative(cell.date).getDay() },
+              date: {
+                year: cell.date.year,
+                month: cell.date.month,
+                day: cell.date.day,
+                dayOfWeek: calendarDateToNative(cell.date).getDay(),
+                iso: toISO(cell.date),
+              },
               isToday: cell.isToday,
               isSelected: cell.isSelected,
               isDisabled: cell.disabled,
               isInRange: cell.inRange,
               isRangeStart: cell.isRangeStart,
               isRangeEnd: cell.isRangeEnd,
+              isRangeBlocked: cell.isRangeBlocked,
+              isCheckoutOnly: cell.isCheckoutOnly,
               isCurrentMonth: cell.isCurrentMonth,
             });
           } catch {
@@ -1061,8 +1145,9 @@ class IntlDatepicker extends HTMLElementBase {
           continue;
         }
 
-        // mapDays can force-disable
-        const isDisabled = cell.disabled || mapped.disabled === true;
+        // A check-out-only day stays selectable; range-blocked days and
+        // mapDays can force-disable.
+        const isDisabled = (cell.disabled && !cell.isCheckoutOnly) || cell.isRangeBlocked || mapped.disabled === true;
 
         // Selection semantics come from the committed selection, never the
         // hover preview.
@@ -1077,6 +1162,8 @@ class IntlDatepicker extends HTMLElementBase {
         if (cell.isToday) classes.push('today');
         if (cell.isSelected) classes.push('selected');
         if (isDisabled) classes.push('disabled');
+        if (cell.isRangeBlocked) classes.push('range-blocked');
+        if (cell.isCheckoutOnly) classes.push('checkout-only');
         if (cell.inRange) classes.push('in-range');
         if (cell.isRangeStart) classes.push('range-start');
         if (cell.isRangeEnd) classes.push('range-end');
@@ -1093,9 +1180,9 @@ class IntlDatepicker extends HTMLElementBase {
           ${cell.isToday ? 'aria-current="date"' : ''}
           aria-label="${escAttr(label)}"
           data-action="select-day"
-          data-year="${cell.date.year}"
           data-month="${cell.date.month}"
           data-day="${cell.date.day}"
+          data-iso="${toISO(cell.date)}"
           type="button"${mapped.style ? ` style="${escAttr(mapped.style)}"` : ''}${mapped.title ? ` title="${escAttr(mapped.title)}"` : ''}
         >${this._formatNumber(cell.day)}${mapped.content || ''}</button></td>`;
       }
@@ -1136,6 +1223,8 @@ class IntlDatepicker extends HTMLElementBase {
     const shadow = this.shadowRoot;
 
     shadow.addEventListener('click', (e) => {
+      // Past midnight, re-render first so the click acts on today's rules.
+      if (this._refreshToday()) this._renderCalendarContent();
       const btn = e.target.closest('[data-action]');
       if (!btn) {
         if (e.target.closest('.idp-input-wrapper')) this._toggleFromTrigger();
@@ -1148,26 +1237,18 @@ class IntlDatepicker extends HTMLElementBase {
     shadow.addEventListener('change', (e) => {
       const select = e.target.closest('select.idp-dropdown[data-action]');
       if (!select) return;
-      const action = select.dataset.action;
-      const val = parseInt(select.value);
-      if (isNaN(val)) return;
-
-      let year = this._state.viewYear;
-      let month = this._state.viewMonth;
-      if (action === 'dropdown-month') {
-        month = val;
-      } else if (action === 'dropdown-year') {
-        year = val;
-        // Clamp month if switching from a Hebrew leap year (13 months) to non-leap (12)
-        const maxMonth = getMonthCount(this._state.calendar, year);
-        if (month > maxMonth) month = maxMonth;
-      } else {
-        return;
+      const { calendar, viewMonth } = this._state;
+      // Options carry the ISO date of their month's / year's first day.
+      let date = parseISOToCalendar(select.value, calendar);
+      if (!date) return;
+      if (select.dataset.action === 'dropdown-year') {
+        // Keep the visible month, clamped when leaving a 13-month year.
+        date = date.add({ months: Math.min(viewMonth, calendar.getMonthsInYear(date)) - 1 });
       }
-      this._state = goToMonth(this._state, year, month);
+      this._showMonth(date);
       this._renderCalendarContent();
       this._announceMonth();
-      this._emit('intl-navigate', { year, month, direction: 'forward' });
+      this._emit('intl-navigate', { year: date.year, month: date.month, direction: 'forward' });
     });
 
     // Commit typed text on blur (allow-input mode)
@@ -1183,6 +1264,7 @@ class IntlDatepicker extends HTMLElementBase {
     });
 
     shadow.addEventListener('keydown', (e) => {
+      this._refreshToday();
       if (e.key === 'Tab' && this._state.isOpen && !this._state.inline) {
         this._handleTabTrap(e);
         return;
@@ -1218,7 +1300,8 @@ class IntlDatepicker extends HTMLElementBase {
         if (!date) return;
         const prev = this._state.hoveredDate;
         // For week mode, skip if still in the same week
-        if (type === 'week' && prev && isSameDay(startOfWeek(date, this._state.locale), startOfWeek(prev, this._state.locale))) return;
+        const { locale, firstDayOfWeek } = this._state;
+        if (type === 'week' && prev && isSameDay(startOfWeek(date, locale, firstDayOfWeek), startOfWeek(prev, locale, firstDayOfWeek))) return;
         if (type === 'range' && prev && isSameDay(date, prev)) return;
         this._state = updateState(this._state, { hoveredDate: date });
         this._updateHoverHighlight();
@@ -1288,14 +1371,13 @@ class IntlDatepicker extends HTMLElementBase {
     }
     const s = this._state;
     const parsed = parseInput(text, s.calendarId, s.locale, this.getAttribute('date-format'));
-    if (parsed && this._isSelectable(parsed)) {
+    const refusal = parsed && this._refusal(parsed);
+    if (parsed && !refusal) {
       this._inputError = '';
       this._selectDate(parsed);
     } else {
       // Persistent error until the next successful entry (no timed flash).
-      this._inputError = parsed
-        ? s.labels.dateUnavailable
-        : fillLabel(s.labels.invalidDate, this._getInputFormat());
+      this._inputError = refusal || fillLabel(s.labels.invalidDate, this._getInputFormat());
       this._syncInput();
       this._updateFormValue();
     }
@@ -1313,11 +1395,8 @@ class IntlDatepicker extends HTMLElementBase {
         this._navigateMonth(1);
         break;
       case 'prev-decade':
-        this._state = updateState(this._state, { viewYear: this._state.viewYear - 20 });
-        this._renderCalendarContent();
-        break;
       case 'next-decade':
-        this._state = updateState(this._state, { viewYear: this._state.viewYear + 20 });
+        this._state = updateState(this._state, viewOf(firstOfView(this._state).add({ years: action === 'prev-decade' ? -20 : 20 })));
         this._renderCalendarContent();
         break;
       case 'show-months':
@@ -1334,28 +1413,27 @@ class IntlDatepicker extends HTMLElementBase {
         this._view = 'days';
         this._renderCalendarContent();
         break;
-      case 'select-year': {
-        const year = parseInt(btn.dataset.year);
-        if (this._state.type === 'year') {
-          this._selectDate(new CalendarDate(this._state.calendar, year, 1, 1));
-        } else {
-          this._state = updateState(this._state, { viewYear: year });
-          this._view = 'months';
-          this._renderCalendarContent();
-          this._focusCurrentCell();
-        }
-        break;
-      }
+      case 'select-year':
       case 'select-month': {
-        const month = parseInt(btn.dataset.month);
-        if (this._state.type === 'month') {
-          this._selectDate(new CalendarDate(this._state.calendar, this._state.viewYear, month, 1));
-        } else {
-          this._state = goToMonth(this._state, this._state.viewYear, month);
-          this._view = 'days';
-          this._renderCalendarContent();
-          this._focusCurrentCell();
+        // Cells carry the ISO date of their period's first day, which keeps
+        // the era (Japanese) that a bare year number would lose.
+        const isYear = action === 'select-year';
+        const date = parseISOToCalendar(btn.dataset.iso, this._state.calendar);
+        if (!date) break;
+        if (this._state.type === (isYear ? 'year' : 'month')) {
+          this._selectDate(date);
+          break;
         }
+        if (isYear) {
+          // Keep the visible month, clamped when leaving a 13-month year.
+          const month = Math.min(this._state.viewMonth, this._state.calendar.getMonthsInYear(date));
+          this._state = updateState(this._state, viewOf(date.add({ months: month - 1 })));
+        } else {
+          this._showMonth(date);
+        }
+        this._view = isYear ? 'months' : 'days';
+        this._renderCalendarContent();
+        this._focusCurrentCell();
         break;
       }
       case 'select-day':
@@ -1374,10 +1452,14 @@ class IntlDatepicker extends HTMLElementBase {
     }
   }
 
+  // Show the month starting at `date` and focus its first day.
+  _showMonth(date) {
+    this._state = updateState(this._state, { focusedDate: date, ...viewOf(date) });
+  }
+
   _navigateMonth(delta) {
-    const next = new CalendarDate(this._state.calendar, this._state.viewYear, this._state.viewMonth, 1)
-      .add({ months: delta });
-    this._state = updateState(this._state, { viewYear: next.year, viewMonth: next.month });
+    const next = firstOfView(this._state, delta);
+    this._state = updateState(this._state, viewOf(next));
     this._view = 'days';
     this._renderCalendarContent();
     this._announceMonth();
@@ -1400,14 +1482,22 @@ class IntlDatepicker extends HTMLElementBase {
 
   _selectDate(date) {
     if (!date) return;
-    const type = this._state.type;
-    if (type === 'month' || type === 'year') date = getPeriodBounds(date, type).start;
-    if (!this._isSelectable(date)) return;
+    const prev = this._state;
+    const type = prev.type;
+    const isPeriod = type === 'month' || type === 'year';
+    if (isPeriod) date = getPeriodBounds(date, type).start;
 
-    const prevCount = this._state.selectedDates?.length || 0;
-    this._state = type === 'month' || type === 'year'
-      ? updateState(this._state, { selectedDate: date, focusedDate: date, viewYear: date.year, viewMonth: date.month })
-      : selectDate(this._state, date);
+    const next = !isPeriod ? selectDate(prev, date)
+      : this._isSelectable(date) ? updateState(prev, { selectedDate: date, focusedDate: date, ...viewOf(date) })
+      : prev;
+    if (next === prev) {
+      // Say why, e.g. "Choose at least 2 nights" (silent at the max-dates limit).
+      this._announce(this._refusal(date));
+      return;
+    }
+
+    const prevCount = prev.selectedDates?.length || 0;
+    this._state = next;
     this._inputError = '';
     this._render();
     this._updateFormValue();
@@ -1419,7 +1509,7 @@ class IntlDatepicker extends HTMLElementBase {
     this._emit('intl-change', detail);
 
     // Close once the selection is complete: not for multiple, nor after a
-    // range's first click. Small delay for visual feedback.
+    // range's first click (or its cancel). Small delay for visual feedback.
     const complete = type !== 'multiple' && (type !== 'range' || this._state.rangeEnd);
     if (complete && !this._state.inline) {
       setTimeout(() => this._closeCalendar(), CLOSE_DELAY);
@@ -1427,23 +1517,19 @@ class IntlDatepicker extends HTMLElementBase {
   }
 
   _selectToday() {
-    const type = this._state.type;
-    let todayDate = toCalendar(today(getTimeZone()), this._state.calendar);
-    if (type === 'month' || type === 'year') todayDate = getPeriodBounds(todayDate, type).start;
+    const { type, today } = this._state;
+    const todayDate = type === 'month' || type === 'year' ? getPeriodBounds(today, type).start : today;
     if (!this._isSelectable(todayDate)) return;
-    this._state = updateState(this._state, { viewYear: todayDate.year, viewMonth: todayDate.month });
+    const prev = this._state;
+    const shown = updateState(prev, viewOf(todayDate));
+    this._state = shown;
     this._selectDate(todayDate);
+    // Refused (e.g. by a range rule): stay on the month the user was viewing.
+    if (this._state === shown) this._state = prev;
   }
 
   _dateFromBtn(btn) {
-    const y = parseInt(btn.dataset.year);
-    const m = parseInt(btn.dataset.month);
-    const d = parseInt(btn.dataset.day);
-    try {
-      return new CalendarDate(this._state.calendar, y, m, d);
-    } catch {
-      return null;
-    }
+    return parseISOToCalendar(btn.dataset.iso, this._state.calendar);
   }
 
   _handleGridKeydown(e) {
@@ -1467,9 +1553,14 @@ class IntlDatepicker extends HTMLElementBase {
     e.preventDefault();
 
     if (action === 'select') {
+      const date = this._state.focusedDate;
+      // Disabled and range-blocked days stay focusable: say why instead.
       // Days force-disabled by mapDays carry only aria-disabled.
-      if (e.target.closest('.idp-day')?.getAttribute('aria-disabled') === 'true') return;
-      this._selectDate(this._state.focusedDate);
+      if (e.target.closest('.idp-day')?.getAttribute('aria-disabled') === 'true') {
+        this._announce(this._refusal(date) || this._state.labels.dateUnavailable);
+      } else {
+        this._selectDate(date);
+      }
       return;
     }
 
@@ -1478,19 +1569,17 @@ class IntlDatepicker extends HTMLElementBase {
       return;
     }
 
-    const oldViewYear = this._state.viewYear;
-    const oldViewMonth = this._state.viewMonth;
+    const oldView = firstOfView(this._state);
 
     if (action === 'startOfWeek' || action === 'endOfWeek') {
-      const target = action === 'startOfWeek'
-        ? startOfWeek(this._state.focusedDate, this._state.locale)
-        : endOfWeek(this._state.focusedDate, this._state.locale);
-      this._state = moveFocus(this._state, { days: target.compare(this._state.focusedDate) });
+      const { focusedDate, locale, firstDayOfWeek } = this._state;
+      const target = (action === 'startOfWeek' ? startOfWeek : endOfWeek)(focusedDate, locale, firstDayOfWeek);
+      this._state = moveFocus(this._state, { days: target.compare(focusedDate) });
     } else {
       this._state = moveFocus(this._state, action);
     }
     if (e.key !== 'PageUp' && e.key !== 'PageDown') {
-      this._stabilizeMultiMonthView(oldViewYear, oldViewMonth);
+      this._stabilizeMultiMonthView(oldView);
     }
     this._renderCalendarContent();
     this._focusCurrentCell();
@@ -1567,17 +1656,13 @@ class IntlDatepicker extends HTMLElementBase {
     )?.focus();
   }
 
-  _stabilizeMultiMonthView(oldViewYear, oldViewMonth) {
+  _stabilizeMultiMonthView(oldView) {
     const monthCount = this._getMonthCount();
     if (monthCount <= 1) return;
+    // Still within the visible panels: restore the old view.
     const focused = this._state.focusedDate;
-    for (let i = 0; i < monthCount; i++) {
-      const panelDate = new CalendarDate(this._state.calendar, oldViewYear, oldViewMonth, 1).add({ months: i });
-      if (focused.year === panelDate.year && focused.month === panelDate.month) {
-        // Still within visible panels — restore the old view
-        this._state = updateState(this._state, { viewYear: oldViewYear, viewMonth: oldViewMonth });
-        return;
-      }
+    if (focused.compare(oldView) >= 0 && focused.compare(oldView.add({ months: monthCount })) < 0) {
+      this._state = updateState(this._state, viewOf(oldView));
     }
   }
 
@@ -1775,7 +1860,7 @@ class IntlDatepicker extends HTMLElementBase {
     if (input.value && !this.value) {
       const parsed = parseInput(input.value, this._state.calendarId, this._state.locale, this.getAttribute('date-format'));
       if (parsed) {
-        this._state = updateState(selectDate(this._state, parsed), { viewYear: parsed.year, viewMonth: parsed.month });
+        this._state = updateState(selectDate(this._state, parsed), viewOf(parsed));
         this._render();
         this._updateFormValue();
         this._updateExternalInput();
@@ -1802,8 +1887,7 @@ class IntlDatepicker extends HTMLElementBase {
     const count = this._view === 'days' ? this._getMonthCount() : 1;
     const titles = [];
     for (let i = 0; i < count; i++) {
-      const s = this._getOffsetState(i);
-      titles.push(formatMonthYear(s.viewYear, s.viewMonth, s.locale, s.calendarId, s.numerals, this._fmt));
+      titles.push(formatMonthYear(firstOfView(this._state, i), this._fmt));
     }
     this._announce(titles.join(' – '));
   }
@@ -1818,7 +1902,8 @@ class IntlDatepicker extends HTMLElementBase {
           end: this._formatDayLabel(s.rangeEnd),
         }));
       } else if (s.rangeStart) {
-        this._announce(`${this._formatDayLabel(s.rangeStart)}, ${labels.rangeStart}`);
+        const hint = this._rangeHint();
+        this._announce(`${this._formatDayLabel(s.rangeStart)}, ${labels.rangeStart}${hint ? `. ${hint}` : ''}`);
       }
       return;
     }
@@ -1837,32 +1922,15 @@ class IntlDatepicker extends HTMLElementBase {
     }
   }
 
-  _formatMonth(date) {
-    const s = this._state;
-    return formatMonthYear(date.year, date.month, s.locale, s.calendarId, s.numerals, this._fmt);
-  }
-
-  _formatYear(date) {
-    try {
-      return this._fmt.year.format(calendarDateToNative(getPeriodBounds(date, 'year').start));
-    } catch {
-      return String(date.year);
-    }
-  }
-
   _formatForType(date) {
-    const s = this._state;
-    if (s.type === 'month') return this._formatMonth(date);
-    if (s.type === 'year') return this._formatYear(date);
-    return formatDateShort(date, s.locale, s.calendarId, s.numerals, this._fmt);
+    const { type } = this._state;
+    if (type === 'month') return formatMonthYear(date, this._fmt);
+    if (type === 'year') return this._fmt.year.format(calendarDateToNative(getPeriodBounds(date, 'year').start));
+    return formatDateShort(date, this._fmt);
   }
 
   _formatNumber(n) {
-    try {
-      return this._fmt.number.format(n);
-    } catch {
-      return String(n);
-    }
+    return this._fmt.number.format(n);
   }
 
   _updateDir() {
@@ -1873,27 +1941,21 @@ class IntlDatepicker extends HTMLElementBase {
     }
   }
 
-  _getCalendarWeek(date) {
-    try {
-      const locale = this._state.locale;
-      const minDays = this._minimalDays;
-      const dateWeekStart = startOfWeek(date, locale);
-      const pivotDay = dateWeekStart.add({ days: minDays - 1 });
-      const weekYear = pivotDay.year;
-      const yearStart = new CalendarDate(date.calendar, weekYear, 1, 1);
-      let week1Start = startOfWeek(yearStart, locale);
-      const week1Pivot = week1Start.add({ days: minDays - 1 });
-      if (week1Pivot.year < weekYear) {
-        week1Start = week1Start.add({ days: 7 });
-      }
-      return { year: weekYear, week: Math.floor(dateWeekStart.compare(week1Start) / 7) + 1 };
-    } catch {
-      return { year: 0, week: 0 };
-    }
-  }
-
+  // Locale week number: weeks start on the picker's first day; week 1 is the
+  // first with at least the locale's minimalDays in the new year (as ICU).
   _getWeekNumber(date) {
-    return this._getCalendarWeek(date).week;
+    try {
+      const { locale, firstDayOfWeek } = this._state;
+      const pivot = this._minimalDays - 1;
+      const weekStart = startOfWeek(date, locale, firstDayOfWeek);
+      // `set` keeps the era, so this is the right year in Japanese too.
+      const yearStart = weekStart.add({ days: pivot }).set({ month: 1, day: 1 });
+      let week1Start = startOfWeek(yearStart, locale, firstDayOfWeek);
+      if (week1Start.add({ days: pivot }).compare(yearStart) < 0) week1Start = week1Start.add({ days: 7 });
+      return Math.floor(weekStart.compare(week1Start) / 7) + 1;
+    } catch {
+      return 0;
+    }
   }
 
   _destroyPositioning() {

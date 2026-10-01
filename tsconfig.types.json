@@ -1,0 +1,15 @@
+{
+  // Type-checks the hand-written declarations (src/**/*.d.ts) through
+  // src/types.check.tsx. `npm run typecheck`; nothing is emitted.
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": []
+  },
+  "files": ["src/types.check.tsx"]
+}

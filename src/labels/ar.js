@@ -26,6 +26,20 @@ export const LABELS_AR = Object.freeze({
   pleaseSelectDate: 'الرجاء اختيار تاريخ',
   dateTooEarly: 'يجب أن يكون التاريخ {date} أو بعده',
   dateTooLate: 'يجب أن يكون التاريخ {date} أو قبله',
+  rangeTooShort: 'اختر {nights} على الأقل',
+  rangeTooLong: 'اختر {nights} كحد أقصى',
+  rangeUnavailable: 'يتضمن النطاق تواريخ غير متاحة',
+  rangeIncomplete: 'اختر تاريخ النهاية',
+  minNightsHint: 'الحد الأدنى للإقامة: {nights}',
+  maxNightsHint: 'الحد الأقصى: {nights}',
+  nights: {
+    zero: '{n} ليلة',
+    one: 'ليلة واحدة',
+    two: 'ليلتان',
+    few: '{n} ليالٍ',
+    many: '{n} ليلة',
+    other: '{n} ليلة',
+  },
 });
 
 registerLabels('ar', LABELS_AR);
