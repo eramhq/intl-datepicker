@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-10-08
+
+Documentation release; runtime behavior and public APIs are unchanged.
+
+### Added
+
+- Eleven focused guides in English and Persian covering installation,
+  localization, all six picker types, values and events, constraints, forms,
+  frameworks and SSR, styling, accessibility, and practical recipes.
+- `docs/navigation.json` and localized page metadata for Eram's shared
+  documentation website.
+- A documentation review note with validation evidence, existing implementation
+  issues, and bilingual product-page link migration targets.
+
+### Changed
+
+- README now provides a concise quick start and links to detailed guides while
+  preserving all existing heading anchors.
+- Examples use deterministic dates and optional imports, with verified value
+  formats and documented implementation limitations.
+
 ## [0.4.1] - 2026-10-01
 
 Follow-ups to 0.4.0. The main bundle grows by about 270 B gzip (CLDR week
@@ -275,6 +296,7 @@ to 16.0 KB gzipped); npm tarball drops from 39.9 KB to ~28 KB gzipped.
 - `CHANGELOG.md` is no longer included in the published tarball; refer to
   GitHub Releases or this file in the repository.
 
+[0.4.2]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.2
 [0.4.1]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.1
 [0.4.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.0
 [0.3.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.3.0

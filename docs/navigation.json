@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "defaultLocale": "en",
+  "locales": ["en", "fa"],
+  "entry": "overview",
+  "sections": [
+    {"id": "start", "title": {"en": "Getting started", "fa": "شروع استفاده"}, "pages": ["overview", "installation"]},
+    {"id": "selection", "title": {"en": "Configure selection", "fa": "تنظیم انتخاب تاریخ"}, "pages": ["localization", "picker-types", "constraints"]},
+    {"id": "integration", "title": {"en": "Use in your application", "fa": "استفاده در برنامه"}, "pages": ["values-and-events", "forms", "frameworks"]},
+    {"id": "experience", "title": {"en": "Appearance and interaction", "fa": "ظاهر و تعامل"}, "pages": ["styling", "accessibility", "recipes"]}
+  ]
+}
