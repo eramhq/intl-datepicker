@@ -8,9 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - Unreleased
 
 Optional time of day for the date picker (issue #1). Date-only pickers are
-unchanged. The main bundle grows by about 3.1 KB gzip (21,213 B → 24,302 B,
-measured locally on macOS); the CI size budget will be re-based on this
-release.
+unchanged. The main bundle grows by about 3.1 KB gzip (21,273 B → 24,347 B on CI);
+the size budget is re-based on this release.
 
 ### Added
 
