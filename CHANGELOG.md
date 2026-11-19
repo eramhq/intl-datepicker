@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - Unreleased
+## [0.5.0] - 2026-11-19
 
 Optional time of day for the date picker (issue #1). Date-only pickers are
 unchanged. The main bundle grows by about 3.1 KB gzip (21,273 B → 24,347 B on CI);
