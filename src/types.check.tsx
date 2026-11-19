@@ -20,6 +20,7 @@ el.addEventListener('intl-change', (e) => {
   const detail: SelectDetail = e.detail;
   if (detail.type === 'range') console.log(detail.start?.year, detail.end?.day);
   if (detail.type === 'month') console.log(detail.calendar?.month, detail.start);
+  if (detail.type === 'date' && detail.time) console.log(detail.time.hour, detail.time.minute, detail.time.second);
 });
 el.addEventListener('intl-navigate', (e) => console.log(e.detail.year, e.detail.direction));
 el.addEventListener('intl-open', (e) => e.preventDefault());
@@ -71,6 +72,15 @@ export const booking = (
 
 export const leave = <IntlDatepicker type="range" excludeDisabled disableFuture firstDayOfWeek={1} />;
 
+export const meeting = <IntlDatepicker time minuteStep={15} defaultTime="09:00" hourCycle={24} min="2026-11-18T09:00" />;
+export const precise = <IntlDatepicker time="second" hourCycle="12" />;
+
+// @ts-expect-error not a time granularity
+export const badTime = <IntlDatepicker time="hour" />;
+
+// @ts-expect-error not an hour cycle
+export const badCycle = <IntlDatepicker hourCycle={11} />;
+
 // @ts-expect-error not an exclude-disabled mode
 export const badMode = <IntlDatepicker excludeDisabled="weeks" />;
 
@@ -80,6 +90,7 @@ export const oldAlias = <IntlDatepicker isDateDisabled={filter} />;
 // ── Raw custom element in JSX ──
 
 export const raw = <intl-datepicker type="range" min-nights="2" exclude-disabled="nights" disable-past />;
+export const rawTime = <intl-datepicker time minute-step="15" hour-cycle="24" default-time="09:00" />;
 
 // @ts-expect-error not a picker type
 export const badType = <intl-datepicker type="time" />;

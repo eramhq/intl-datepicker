@@ -93,6 +93,28 @@ Import the base module. Omit `exclude-disabled` when a request may include weeke
 
 The initial range is valid despite the weekend and March 17 inside it. The output is `2026-03-13/2026-03-18`. If every included day must be available, add `exclude-disabled="days"`; that same value stays visible but fails validity.
 
+## Meeting times and UTC
+
+Offer meeting slots every 15 minutes from 9:00, and send the server an instant:
+
+```html
+<intl-datepicker id="meeting" name="meeting" time minute-step="15"
+  default-time="09:00" min="2026-03-16T09:00" locale="en-GB"></intl-datepicker>
+```
+
+```js
+import 'intl-datepicker';
+
+const picker = document.querySelector('#meeting');
+picker.addEventListener('intl-change', () => {
+  // '2026-03-16T09:30' read in the browser's time zone, then as UTC.
+  const utc = picker.valueAsDate?.toISOString() ?? null;
+  console.log(picker.value, utc);
+});
+```
+
+Picking 16 March gives `2026-03-16T09:00`; choosing `30` in the minute menu gives `2026-03-16T09:30`. In Tehran (UTC+03:30) `utc` is `2026-03-16T06:00:00.000Z`. `valueAsDate` uses the runtime's time zone. For another zone, convert with Temporal instead: `Temporal.PlainDateTime.from(picker.value).toZonedDateTime('Asia/Tehran').toInstant().toString()`. The submitted form field stays the wall-clock `value`.
+
 ## Common configuration problems
 
 | Symptom | Check |

@@ -6,6 +6,8 @@ import type {
   ExcludeDisabledMode,
   DateFormat,
   CaptionLayout,
+  TimeGranularity,
+  HourCycle,
   SelectDetail,
   NavigateDetail,
   MapDaysFn,
@@ -52,6 +54,14 @@ export interface IntlDatepickerProps extends Omit<React.HTMLAttributes<IntlDatep
   maxNights?: string | number;
   /** `true` or 'days': no disabled day in the range; 'nights': the end may be the first disabled day. */
   excludeDisabled?: boolean | ExcludeDisabledMode;
+  /** Also pick a time of day (`type="date"` only). `"second"` adds seconds. */
+  time?: boolean | TimeGranularity;
+  /** Minutes offered in the time picker, e.g. 15. */
+  minuteStep?: string | number;
+  /** 12- or 24-hour clock. Defaults to the locale's. */
+  hourCycle?: HourCycle;
+  /** Time filled in when a day is picked first, "HH:mm[:ss]". */
+  defaultTime?: string;
 
   // Dual-form attributes (string for JSON form, object/array for direct form)
   presets?: string | RangePreset[];
@@ -139,6 +149,10 @@ type IntlDatepickerIntrinsicProps = React.DetailedHTMLProps<
     'min-nights'?: string;
     'max-nights'?: string;
     'exclude-disabled'?: boolean | ExcludeDisabledMode;
+    time?: boolean | TimeGranularity;
+    'minute-step'?: string;
+    'hour-cycle'?: '12' | '24';
+    'default-time'?: string;
     numerals?: string;
     'caption-layout'?: CaptionLayout;
     'disabled-dates'?: string;

@@ -47,6 +47,20 @@ describe('React wrapper', () => {
     expect(el.hasAttribute('inline')).toBe(false);
   });
 
+  it('maps the time props to attributes', () => {
+    const el = render({ time: true, minuteStep: 15, hourCycle: 24, defaultTime: '09:00', value: '2026-11-18' });
+    expect(el.getAttribute('time')).toBe('');
+    expect(el.getAttribute('minute-step')).toBe('15');
+    expect(el.getAttribute('hour-cycle')).toBe('24');
+    expect(el.getAttribute('default-time')).toBe('09:00');
+    expect(el.value).toBe('2026-11-18T09:00');
+    act(() => root.render(createElement(IntlDatepicker, { time: 'second', value: '2026-11-18T09:00:30' })));
+    expect(el.getAttribute('time')).toBe('second');
+    expect(el.value).toBe('2026-11-18T09:00:30');
+    act(() => root.render(createElement(IntlDatepicker, { time: false })));
+    expect(el.hasAttribute('time')).toBe(false);
+  });
+
   it('maps the v0.4 rule props to attributes', () => {
     const el = render({
       type: 'range', minNights: 2, maxNights: '28', excludeDisabled: 'nights',

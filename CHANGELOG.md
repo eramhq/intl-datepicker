@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-19
+
+Optional time of day for the date picker (issue #1). Date-only pickers are
+unchanged. The main bundle grows by about 3.1 KB gzip (21,273 B → 24,347 B on CI);
+the size budget is re-based on this release.
+
+### Added
+
+- `time` attribute for `type="date"`: hour and minute `<select>`s under the
+  calendar, plus seconds with `time="second"` and AM/PM on a 12-hour clock.
+  The value is a local wall-clock date-time with no time zone,
+  `YYYY-MM-DDTHH:mm[:ss]` (the `datetime-local` / `Temporal.PlainDateTime`
+  format); the date part stays Gregorian ISO in every calendar, and a
+  date-only value gets `default-time`. Ignored with a console warning for
+  other types in this version.
+- `minute-step`, `hour-cycle` (`12`/`24`, defaulting to the locale's clock)
+  and `default-time` attributes.
+- With `time`, picking a day keeps the popup open; a Done button, Escape or an
+  outside click closes it. "Today" becomes "Now" (today at the current time,
+  rounded down to the minute step).
+- `min`/`max` accept a time; options outside the bounds are disabled on the
+  min/max day, picked times move inside them, and validity messages show the
+  time. With `time`, `disable-past`/`disable-future` also limit the times on
+  today.
+- Typed input (`allow-input`) accepts a time after the date, with localized
+  digits and day periods, e.g. `۱۴۰۵/۰۸/۲۷ ۱۴:۳۰` or `11/18/2026 2:30 PM`.
+- `detail.time` (`{hour, minute, second}`) on date events and `getValue()`;
+  `valueAsDate` includes the time.
+- Labels `now`, `done`, `time`, `hour`, `minute`, `second` and `dayPeriod`,
+  translated in the Persian, Arabic and Hebrew label sets.
+- CSS parts `time`, `time-select` and `done-button`; 44 px touch targets with
+  a 16 px font for the time selects on coarse pointers.
+- React props `time`, `minuteStep`, `hourCycle` and `defaultTime`; types
+  `TimeGranularity`, `HourCycle`, `TimeOfDay` and `DateDetail.time`.
+
 ## [0.4.2] - 2026-10-08
 
 Documentation release; runtime behavior and public APIs are unchanged.
@@ -296,6 +331,7 @@ to 16.0 KB gzipped); npm tarball drops from 39.9 KB to ~28 KB gzipped.
 - `CHANGELOG.md` is no longer included in the published tarball; refer to
   GitHub Releases or this file in the repository.
 
+[0.5.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.5.0
 [0.4.2]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.2
 [0.4.1]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.1
 [0.4.0]: https://github.com/eramhq/intl-datepicker/releases/tag/v0.4.0

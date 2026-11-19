@@ -52,6 +52,12 @@ Validation follows this order:
 
 Programmatically assigned dates are retained even when invalid. Bound validation precedes availability, which precedes range length. Per-day validity rules do not test every day of week/month/year selections. `max-dates` is an assignment/interaction limit, not a validity flag.
 
+### Bounds with a time
+
+With `time`, `min` and `max` accept a date and time: `min="2026-03-15T09:30"`. A date-only `min` means the start of that day; a date-only `max` allows that whole day. On the min or max day, hour, minute and AM/PM options entirely outside the bound are disabled. Picking a day or an hour moves the time inside the bound, so a user who picks the min day with `default-time` `00:00` gets `09:30`. A programmatic or typed time outside the bound is kept and reported as `rangeUnderflow`/`rangeOverflow`; the message includes the bound's time, for example `Date must be 03/15/2026, 9:30 AM or later`.
+
+With `time`, `disable-past` and `disable-future` also apply to times on today. On today, `disable-past` disables times before now, rounded up to the minute step: at 14:37 with `minute-step="15"` the first allowed time is 14:45. `disable-future` disables times after now. Picking today, or pressing **Now**, moves the time into that window, and an earlier or later value reports `rangeUnderflow`/`rangeOverflow` with the date and time limit in the message. "Now" is evaluated when the picker renders or is used, not by a timer, so a form left open can go stale: validate the time on the server too.
+
 A required incomplete range is still present in `FormData` as its start date. It is rejected by validation, not by data extraction. Without `required`, a pending start can pass validity; your application must decide whether partial ranges are acceptable. See [range rules](constraints.md#range-rules).
 
 ## Reset and disabled state

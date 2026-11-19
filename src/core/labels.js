@@ -11,6 +11,14 @@ export const DEFAULT_LABELS_EN = Object.freeze({
   today: 'Today',
   clear: 'Clear',
   clearDate: 'Clear date',
+  // Date + time (`time` attribute): "Today" becomes "Now"; Done closes.
+  now: 'Now',
+  done: 'Done',
+  time: 'Time',
+  hour: 'Hour',
+  minute: 'Minute',
+  second: 'Second',
+  dayPeriod: 'AM/PM',
   // Dialog / regions
   datePicker: 'Date picker',
   rangePresets: 'Date range presets',

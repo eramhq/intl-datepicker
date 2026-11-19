@@ -7,9 +7,11 @@ description: تاریخ بدون ساعت را ذخیره کنید و از رو�
 
 `value` رشته‌ای است که یک تاریخ یا دوره را نشان می‌دهد، نه یک لحظه دقیق روی خط زمان. برای یک روز، `2026-03-15` به همان روز میلادی اشاره دارد، مستقل از تقویم نمایشی. در مدل داده هم آن را به شکل تاریخ بدون ساعت نگه دارید. در صورت نیاز، دو سر بازه را در دو فیلد تاریخ ذخیره کنید. هفته، چند روز و دوره دارای پسوند تقویم به ساختار متناسب با خود نیاز دارند و همگی در یک ستون SQL DATE جا نمی‌گیرند.
 
-صرفا برای ذخیره‌سازی، تاریخ بدون ساعت را به timestamp تبدیل نکنید. اگر برنامه به یک لحظه دقیق نیاز دارد، باید ساعت و منطقه زمانی را مشخص کند. انتخابگر تنظیمی برای ساعت روز یا منطقه زمانی ندارد.
+صرفا برای ذخیره‌سازی، تاریخ بدون ساعت را به timestamp تبدیل نکنید. اگر برنامه به یک لحظه دقیق نیاز دارد، باید ساعت و منطقه زمانی را مشخص کند. انتخابگر تنظیمی برای منطقه زمانی ندارد.
 
-`valueAsDate` برای راحتی، یک `Date` بومی در نیمه‌شب محلی می‌دهد. برای انتخاب خالی، بازه و چند روز، null است. برای ماه و سال، روز اول دوره را می‌دهد. برای هفته، دوشنبه هفته ISO را می‌دهد که ممکن است با شروع هفته محلی متفاوت باشد. برای مرزهای هفته از `rangeStart` و `rangeEnd` استفاده کنید.
+با [ویژگی `time`](picker-types.md#تاریخ-و-ساعت)، مقدار انتخابگر روز، تاریخ و ساعت محلی است: `2026-03-15T14:30` یا با `time="second"`، `2026-03-15T14:30:05`. این مقدار یک ساعت دیواری را نشان می‌دهد، نه لحظه‌ای روی خط زمان، و قالب آن همان قالب `<input type="datetime-local">` و `Temporal.PlainDateTime` است. بخش تاریخ در همه تقویم‌ها میلادی ISO می‌ماند. مقدار بدون ساعت، `default-time` را می‌گیرد و ثانیه جز با `time="second"` حذف می‌شود. آن را به شکل timestamp بدون منطقه زمانی ذخیره کنید یا آگاهانه تبدیل کنید ([نمونه UTC](recipes.md#زمان-جلسه-و-utc) را ببینید).
+
+`valueAsDate` برای راحتی، یک `Date` بومی در نیمه‌شب محلی می‌دهد؛ با `time`، همان ساعت را در منطقه زمانی محیط اجرا می‌دهد. برای انتخاب خالی، بازه و چند روز، null است. برای ماه و سال، روز اول دوره را می‌دهد. برای هفته، دوشنبه هفته ISO را می‌دهد که ممکن است با شروع هفته محلی متفاوت باشد. برای مرزهای هفته از `rangeStart` و `rangeEnd` استفاده کنید.
 
 «امروز» از منطقه زمانی تشخیص‌داده‌شده محیط استفاده می‌کند که در سطح ماژول نگه داشته می‌شود. دکمه امروز، بازه‌های نسبی و `disable-past` و `disable-future` به همین منطقه وابسته‌اند. امروز هنگام رندر و تعامل به‌روز می‌شود؛ زمان‌سنجی برای لحظه نیمه‌شب وجود ندارد. برای مهلت کسب‌وکار در منطقه زمانی دیگر، روزهای مجاز را در برنامه محاسبه کنید و حدهای صریح بدهید.
 
@@ -66,13 +68,13 @@ picker.setValue('2026-03-15');
 
 | نوع | فیلدهای دیگر |
 | --- | --- |
-| `date` | `calendar: { year, month, day }` یا null |
+| `date` | `calendar: { year, month, day }` یا null؛ با `time`، `time: { hour, minute, second }` یا null هم دارد |
 | `range`، `week` | `start` و `end` به شکل `{ year, month, day }` در تقویم فعال یا null |
 | `multiple` | `dates`، آرایه‌ای از `{ year, month, day }` در تقویم فعال |
 | `month` | `calendar: { year, month }` یا null؛ رشته‌های میلادی ISO برای `start` و `end` یا null |
 | `year` | `calendar: { year }` یا null؛ رشته‌های میلادی ISO برای `start` و `end` یا null |
 
-هنگام پاک کردن، رویداد `value` خالی، فیلدهای تاریخ null یا فهرست `dates` خالی دارد. در مقابل، `getValue()` برای انتخاب خالی null برمی‌گرداند. بازه ناتمام شروع دارد و پایان آن null است. مرزهای ماه و سال شامل آخرین روز هم هستند.
+فیلد `time` فقط با ویژگی `time` وجود دارد و `second` جز با `time="second"` صفر است. هنگام پاک کردن، رویداد `value` خالی، فیلدهای تاریخ null یا فهرست `dates` خالی دارد. در مقابل، `getValue()` برای انتخاب خالی null برمی‌گرداند. بازه ناتمام شروع دارد و پایان آن null است. مرزهای ماه و سال شامل آخرین روز هم هستند.
 
 `NavigateDetail` شامل `year` و `month` در تقویم فعال، `direction` با مقدار `forward` یا `backward` و مرزهای میلادی ISO به نام `start` و `end` برای همه ماه‌های نمایان است. هنگام ایجاد اولیه ارسال نمی‌شود؛ ظرفیت اولیه را خودتان بارگذاری کنید.
 
@@ -118,6 +120,6 @@ picker.setValue('2026-03');
 
 خروجی نمونه `3`، `2026-03-01` و `2026-03-31` است. پیش از دسترسی به فیلدهای ویژه، `SelectDetail` را با `type` محدود کنید و حالت پاک‌شده را در نظر بگیرید.
 
-ورودی تعریف نوع، `DatepickerType`، `DayOfWeekName`، `ExcludeDisabledMode`، `DateFormat`، `CaptionLayout`، هر ۶ رابط detail، `SelectDetail`، `NavigateDetail`، `DayInfo`، `MapDaysInput`، `MapDaysResult`، `MapDaysFn`، `RangePreset`، `DisabledDatesFilterFn`، `IntlDatepickerLabels`، `PluralLabel` و `IntlDatepickerEventMap` را صادر می‌کند. نگاشت نام عنصر و رویدادها هم گسترش داده می‌شود. ورودی React نوع‌های `IntlDatepickerProps` و `IntlDatepickerRef` را دارد.
+ورودی تعریف نوع، `DatepickerType`، `DayOfWeekName`، `ExcludeDisabledMode`، `TimeGranularity`، `HourCycle`، `TimeOfDay`، `DateFormat`، `CaptionLayout`، هر ۶ رابط detail، `SelectDetail`، `NavigateDetail`، `DayInfo`، `MapDaysInput`، `MapDaysResult`، `MapDaysFn`، `RangePreset`، `DisabledDatesFilterFn`، `IntlDatepickerLabels`، `PluralLabel` و `IntlDatepickerEventMap` را صادر می‌کند. نگاشت نام عنصر و رویدادها هم گسترش داده می‌شود. ورودی React نوع‌های `IntlDatepickerProps` و `IntlDatepickerRef` را دارد.
 
 از `IntlDatepickerElement` به‌عنوان نوع استفاده کنید، نه سازنده زمان اجرا. ماژول JavaScript، `IntlDatepicker` و `register` را صادر می‌کند، اما تعریف نوع فعلی آن‌ها را اعلام نمی‌کند. همچنین setter تایپ‌شده `labels` و `presets` فقط شیء و آرایه می‌پذیرد، هرچند زمان اجرا رشته JSON هم می‌پذیرد. در TypeScript از import ثبت‌کننده و setter شیء یا آرایه استفاده کنید.

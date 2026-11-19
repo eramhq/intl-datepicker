@@ -438,6 +438,7 @@
             <a href="#sec-multiple">Multiple</a>
             <a href="#sec-week">Week</a>
             <a href="#sec-month-year">Month &amp; Year</a>
+            <a href="#sec-time">Date &amp; Time</a>
             <a href="#sec-presets">Presets</a>
           </div>
           <div class="toc-group">
@@ -692,6 +693,38 @@
           <intl-datepicker id="demo-year" type="year" calendar="gregory" locale="en-US" placeholder="Select year..."></intl-datepicker>
           <intl-datepicker id="demo-month-fa" type="month" calendar="persian" locale="fa-IR" placeholder="ماه (شمسی)"></intl-datepicker>
           <intl-datepicker id="demo-year-fa" type="year" calendar="persian" locale="fa-IR" placeholder="سال (شمسی)"></intl-datepicker>
+        </div>
+        <div class="output">No selection</div>
+      </section>
+
+      <!-- 7b. Date & time -->
+      <section id="sec-time" class="demo-section" data-output>
+        <h2>Date &amp; Time</h2>
+        <p>Add <code>time</code> to pick a time of day under the calendar. The value is a local clock time
+          with no time zone, like <code>datetime-local</code>: <code>2026-11-18T14:30</code>. The clock follows
+          the locale (12-hour with AM/PM in en-US, 24-hour in fa-IR) unless <code>hour-cycle</code> overrides it.
+          Picking a day keeps the popup open; <strong>Done</strong>, Escape or a click outside closes it, and
+          <strong>Today</strong> becomes <strong>Now</strong>.</p>
+        <div class="attr-list">
+          <span class="attr-tag">time</span>
+          <span class="attr-tag">minute-step</span>
+          <span class="attr-tag">hour-cycle</span>
+          <span class="attr-tag">default-time</span>
+        </div>
+        <div class="code-block">
+          <span class="code-label">HTML</span>
+          <button class="copy-btn">Copy</button>
+          <pre><code>&lt;intl-datepicker time locale="en-US"
+  minute-step="15" default-time="09:00"&gt;
+&lt;/intl-datepicker&gt;
+
+&lt;intl-datepicker time calendar="persian" locale="fa-IR"
+  value="2026-11-18T14:30"&gt;
+&lt;/intl-datepicker&gt;</code></pre>
+        </div>
+        <div class="demo-row">
+          <intl-datepicker id="demo-time" time calendar="gregory" locale="en-US" minute-step="15" default-time="09:00" placeholder="Pick a date and time..."></intl-datepicker>
+          <intl-datepicker id="demo-time-fa" time calendar="persian" locale="fa-IR" value="2026-11-18T14:30" placeholder="تاریخ و ساعت"></intl-datepicker>
         </div>
         <div class="output">No selection</div>
       </section>
@@ -1165,6 +1198,7 @@ picker.disabledDatesFilter = ({ day }) =&gt; day % 2 === 0;</code></pre>
         lines.push(`ISO span:  ${detail.start} → ${detail.end}`);
       } else {
         lines.push(`Value:     ${detail.value}`);
+        if (detail.time) lines.push(`Time:      ${JSON.stringify(detail.time)}`);
       }
 
       lines.push(`Formatted: ${detail.formatted}`);

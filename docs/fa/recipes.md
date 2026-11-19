@@ -93,6 +93,31 @@ loadAvailability('2026-03-01', '2026-04-30');
 
 بازه اولیه با وجود آخر هفته و ۱۷ مارس در میانه آن معتبر است. خروجی `2026-03-13/2026-03-18` خواهد بود. اگر همه روزها باید مجاز باشند، `exclude-disabled="days"` اضافه کنید؛ همان مقدار دیده می‌شود، اما اعتبارسنجی را رد می‌کند.
 
+## زمان جلسه و UTC
+
+نوبت‌های جلسه را هر ۱۵ دقیقه از ساعت ۹ نشان دهید و یک لحظه دقیق به سرور بفرستید:
+
+```html
+<intl-datepicker id="meeting" name="meeting" time minute-step="15"
+  default-time="09:00" min="2026-03-16T09:00"
+  calendar="persian" locale="fa-IR"></intl-datepicker>
+```
+
+```js
+import 'intl-datepicker/calendars/persian';
+import 'intl-datepicker/labels/fa';
+import 'intl-datepicker';
+
+const picker = document.querySelector('#meeting');
+picker.addEventListener('intl-change', () => {
+  // '2026-03-16T09:30' در منطقه زمانی مرورگر خوانده و به UTC تبدیل می‌شود.
+  const utc = picker.valueAsDate?.toISOString() ?? null;
+  console.log(picker.value, utc);
+});
+```
+
+انتخاب ۲۵ اسفند ۱۴۰۴ مقدار `2026-03-16T09:00` را می‌دهد و انتخاب `۳۰` در منوی دقیقه، `2026-03-16T09:30`. در تهران (UTC+03:30)، `utc` برابر `2026-03-16T06:00:00.000Z` است. `valueAsDate` از منطقه زمانی محیط اجرا استفاده می‌کند. برای منطقه دیگر، با Temporal تبدیل کنید: `Temporal.PlainDateTime.from(picker.value).toZonedDateTime('Asia/Tehran').toInstant().toString()`. فیلد ارسالی فرم همان `value` ساعت محلی می‌ماند.
+
 ## مشکلات رایج تنظیم
 
 | نشانه | بررسی لازم |

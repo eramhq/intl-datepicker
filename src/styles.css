@@ -447,6 +447,45 @@
   font-size: 13px;
 }
 
+/* With Done, "Now" stays at the start and Clear + Done group at the end. */
+.idp-footer-btn[data-action="today"] {
+  margin-inline-end: auto;
+}
+
+.idp-done-btn {
+  background: var(--idp-primary);
+  border-color: var(--idp-primary);
+  color: var(--idp-selected-text);
+  font-weight: 600;
+}
+
+.idp-done-btn:hover {
+  background: color-mix(in srgb, var(--idp-primary) 85%, black);
+}
+
+/* --- Time of day --- */
+.idp-time {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.idp-time-fields {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.idp-time-select {
+  font-variant-numeric: tabular-nums;
+}
+
+.idp-time-sep {
+  font-weight: 600;
+}
+
 
 /* --- Live region --- */
 .idp-sr-only {
@@ -588,7 +627,8 @@
   .idp-footer-btn:focus-visible,
   .idp-preset-btn:focus-visible,
   .idp-year-cell:focus-visible,
-  .idp-month-cell:focus-visible {
+  .idp-month-cell:focus-visible,
+  .idp-dropdown:focus-visible {
     outline: 3px solid CanvasText;
     outline-offset: 2px;
   }
@@ -643,5 +683,12 @@
   .idp-nav-btn {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  /* 16px keeps iOS Safari from zooming in when a select is focused. */
+  .idp-time-select,
+  .idp-time ~ .idp-footer .idp-footer-btn {
+    min-height: 44px;
+    font-size: 16px;
   }
 }

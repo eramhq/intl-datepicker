@@ -7,15 +7,36 @@ export type DatepickerType = 'date' | 'range' | 'week' | 'multiple' | 'month' | 
 /** A day of week for `first-day-of-week` / `disabled-days-of-week`. */
 export type DayOfWeekName = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
 
+/** `time` granularity: `''`/`'minute'` picks hours and minutes, `'second'` adds seconds. */
+export type TimeGranularity = '' | 'minute' | 'second';
+
+/** `hour-cycle`: 12- or 24-hour clock. Defaults to the locale's. */
+export type HourCycle = 12 | 24 | '12' | '24';
+
+/** A wall-clock time of day, with no time zone. */
+export interface TimeOfDay {
+  hour: number;
+  minute: number;
+  /** Always 0 unless `time="second"`. */
+  second: number;
+}
+
 /** `exclude-disabled` modes: `''`/`'days'` excludes every day, `'nights'` lets the end land on a disabled day. */
 export type ExcludeDisabledMode = '' | 'days' | 'nights';
 
 // ── Event detail types ──
 
+/**
+ * Date picker detail. With the `time` attribute, `value` is a local
+ * wall-clock date-time such as `"2026-11-18T14:30"` (the `datetime-local` /
+ * `Temporal.PlainDateTime` format) and `time` is set.
+ */
 export interface DateDetail {
   type: 'date';
   value: string;
   calendar: { year: number; month: number; day: number } | null;
+  /** Only with the `time` attribute: the picked time, or null with no value. */
+  time?: TimeOfDay | null;
   formatted: string;
 }
 
@@ -182,6 +203,17 @@ export interface IntlDatepickerLabels {
   selectMonth?: string;
   selectYear?: string;
   weekNumber?: string;
+  /** Replaces "Today" with the `time` attribute: today at the current time. */
+  now?: string;
+  /** Closes a date + time popup. */
+  done?: string;
+  /** Accessible name of the time row. */
+  time?: string;
+  hour?: string;
+  minute?: string;
+  second?: string;
+  /** Accessible name of the AM/PM select. */
+  dayPeriod?: string;
   /** Appended to a day's accessible name, e.g. "June 15, 2024, selected". */
   selected?: string;
   rangeStart?: string;
@@ -249,6 +281,7 @@ export declare class IntlDatepickerElement extends HTMLElement {
 
   // --- Read-only properties ---
 
+  /** The value as a `Date`; with `time`, that wall-clock time in the browser's time zone. */
   readonly valueAsDate: Date | null;
   readonly calendarValue: CalendarDate | null;
   readonly displayValue: string;
