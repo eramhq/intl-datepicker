@@ -6,12 +6,13 @@ import {
   createState, updateState, selectDate, moveFocus, refreshToday, viewOf, firstOfView,
   goToMonth, toISO, isDateDisabled, isInRange, isRangeEdge, getHoveredWeekBounds, rangeError, hasPendingStart,
   parseTypedValue, parseValueForType, parseISOToCalendar, serializeValueForType, getPeriodBounds, getNavLimits,
+  clampTime, timeBounds, timeToSeconds, secondsToTime,
 } from './core/state.js';
 import { generateMonthGrid } from './core/calendar-grid.js';
 import { renderHeader, renderNavButton, renderYearGrid, renderMonthGrid as renderMonthPicker } from './core/calendar-header.js';
-import { formatDateShort, formatRange, formatMonthYear, getGregorianEquivalent } from './utils/format.js';
+import { formatDateShort, formatDateTime, formatRange, formatMonthYear, getGregorianEquivalent } from './utils/format.js';
 import { positionCalendar } from './core/positioning.js';
-import { parseInput, getLocaleSegmentOrder } from './core/date-input.js';
+import { parseInput, splitTime, getLocaleSegmentOrder } from './core/date-input.js';
 import { resolveLabels, fillLabel, fillPlural } from './core/labels.js';
 
 const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
@@ -43,7 +44,8 @@ const supportsPopover = () => typeof HTMLElement !== 'undefined'
 const HTMLElementBase = typeof HTMLElement !== 'undefined' ? HTMLElement : class {};
 
 /**
- * Multi-calendar date picker. Values are time-zone-free ISO strings.
+ * Multi-calendar date picker. Values are time-zone-free ISO strings; with
+ * `time`, a local wall-clock date and time (`2026-11-18T14:30`).
  *
  * @tag intl-datepicker
  * @summary Form-associated date, range, week, multiple, month and year picker for 14 calendar systems.
@@ -85,6 +87,10 @@ const HTMLElementBase = typeof HTMLElement !== 'undefined' ? HTMLElement : class
  * @attr {'auto'|'YMD'|'DMY'|'MDY'} date-format - Segment order for typed input.
  * @attr {'button'|'dropdown'|'dropdown-months'|'dropdown-years'} caption-layout - Header layout.
  * @attr {boolean} fixed-weeks - Always render six weeks.
+ * @attr {''|'minute'|'second'} time - Also pick a time of day (`type="date"` only). `"second"` adds seconds. The value becomes `YYYY-MM-DDTHH:mm[:ss]`.
+ * @attr {number} minute-step - Minutes offered in the time picker, e.g. `15` for :00, :15, :30, :45. Default `1`.
+ * @attr {'12'|'24'} hour-cycle - 12- or 24-hour clock. Defaults to the locale's.
+ * @attr {string} default-time - Time filled in when a day is picked first, `HH:mm[:ss]`. Default `00:00`.
  *
  * @fires intl-select - A date was picked by the user. `detail` is a SelectDetail.
  * @fires intl-change - The value changed. `detail` is a SelectDetail.
@@ -110,8 +116,11 @@ const HTMLElementBase = typeof HTMLElement !== 'undefined' ? HTMLElement : class
  * @csspart month-cell - Month button in the month view.
  * @csspart year-cell - Year button in the year view.
  * @csspart footer - Footer with Today and Clear.
- * @csspart today-btn - Today button.
+ * @csspart today-btn - Today button ("Now" with `time`).
  * @csspart clear-btn - Clear button in the footer.
+ * @csspart time - Time-of-day row (`time`).
+ * @csspart time-select - Hour, minute, second and AM/PM `<select>`s.
+ * @csspart done-button - Done button that closes a date + time popup.
  * @csspart alternate - Gregorian equivalent line (`show-alternate`).
  * @csspart presets - Range presets sidebar.
  * @csspart range-hint - Minimum/maximum length shown while a range start is pending.
@@ -153,6 +162,7 @@ class IntlDatepicker extends HTMLElementBase {
       'caption-layout', 'fixed-weeks',
       'first-day-of-week', 'disabled-days-of-week', 'disable-past', 'disable-future',
       'min-nights', 'max-nights', 'exclude-disabled',
+      'time', 'minute-step', 'hour-cycle', 'default-time',
     ];
   }
 
@@ -246,15 +256,21 @@ class IntlDatepicker extends HTMLElementBase {
       case 'disable-future':
       case 'min-nights':
       case 'max-nights':
-      case 'exclude-disabled': {
+      case 'exclude-disabled':
+      case 'time':
+      case 'minute-step':
+      case 'hour-cycle':
+      case 'default-time': {
         // Re-derive state but keep the current selection (including a pending
         // range start), the open state and, for the same type, the visible
         // month and view, so an availability update doesn't jump the calendar.
         // Month/year selections carry over as a plain ISO date, which snaps
-        // to the right period in whatever calendar is now active.
+        // to the right period in whatever calendar is now active, and so does
+        // the day of a date + time when the time is turned off.
         const prev = this._state;
         const { type, selectedDate } = prev;
-        const keep = (type === 'month' || type === 'year') && selectedDate ? toISO(selectedDate) : this.value;
+        const toDate = type === 'month' || type === 'year' || (prev.timeMode && !this._timeMode(this.type, false));
+        const keep = toDate && selectedDate ? toISO(selectedDate) : this.value;
         const view = this._view;
         this._initState(keep);
         const cal = this._state.calendar;
@@ -377,7 +393,10 @@ class IntlDatepicker extends HTMLElementBase {
     if (!s || !this.value) return null;
     if (s.type === 'multiple' || s.type === 'range') return null;
     if (s.type === 'week') return calendarDateToNative(parseTypedValue(this.value, 'week', s.calendar));
-    return calendarDateToNative(s.selectedDate);
+    const date = calendarDateToNative(s.selectedDate);
+    // Date + time: that wall-clock time in the browser's time zone.
+    if (s.timeMode) date.setHours(s.time.hour, s.time.minute, s.time.second);
+    return date;
   }
 
   get calendarValue() {
@@ -395,7 +414,8 @@ class IntlDatepicker extends HTMLElementBase {
       const sep = this.getAttribute('date-separator') || ', ';
       return (s.selectedDates || []).map(d => formatDateShort(d, fmt)).join(sep);
     }
-    return s.selectedDate ? this._formatForType(s.selectedDate) : '';
+    if (!s.selectedDate) return '';
+    return s.timeMode ? formatDateTime(s.selectedDate, s.time, fmt) : this._formatForType(s.selectedDate);
   }
 
   get rangeStart() {
@@ -438,7 +458,9 @@ class IntlDatepicker extends HTMLElementBase {
         end: toISO(end),
       };
     }
-    return { ...base, calendar: d ? toPlainDate(d) : null };
+    const detail = { ...base, calendar: d ? toPlainDate(d) : null };
+    if (s?.timeMode) detail.time = d ? { ...s.time } : null;
+    return detail;
   }
 
   getValue() {
@@ -638,6 +660,10 @@ class IntlDatepicker extends HTMLElementBase {
       sortDates: has('sort-dates'),
       fixedWeeks: has('fixed-weeks'),
       labels: resolveLabels(locale, userLabels),
+      timeMode: this._timeMode(isValidType ? type : 'date', true),
+      minuteStep: this.getAttribute('minute-step'),
+      hourCycle: this.getAttribute('hour-cycle'),
+      defaultTime: this.getAttribute('default-time'),
     });
     // Formatters depend only on locale/calendar/numerals/first day: built
     // once per state instead of per cell / per render.
@@ -647,6 +673,18 @@ class IntlDatepicker extends HTMLElementBase {
     if (value && !this.value && valueOverride === undefined) this._warnBadValue(value);
 
     this._parsedPresets = parseJSONAttr(this.getAttribute('presets'), Array.isArray);
+  }
+
+  // Time-of-day granularity from the `time` attribute: null, 'minute' or
+  // 'second'. Only date pickers have a time in this version.
+  _timeMode(type, warn) {
+    const attr = this.getAttribute('time');
+    if (attr == null) return null;
+    if (type !== 'date') {
+      if (warn) console.warn(`[intl-datepicker] The time attribute only works with type="date"; ignoring it for type="${type}".`);
+      return null;
+    }
+    return attr === 'second' ? 'second' : 'minute';
   }
 
   _warnBadValue(value) {
@@ -664,7 +702,7 @@ class IntlDatepicker extends HTMLElementBase {
     }
     const s = this._state;
     const prev = this.value;
-    const parsed = parseValueForType(raw || '', s.type, s.calendar, s.locale, s.firstDayOfWeek);
+    const parsed = parseValueForType(raw || '', s.type, s.calendar, s.locale, s.firstDayOfWeek, s.timeMode && s);
     if (!parsed) {
       this._warnBadValue(raw);
       return;
@@ -679,7 +717,7 @@ class IntlDatepicker extends HTMLElementBase {
       if (s.sortDates) selectedDates.sort((a, b) => a.compare(b));
     }
 
-    const changes = { selectedDate, rangeStart, rangeEnd, selectedDates, hoveredDate: null };
+    const changes = { selectedDate, rangeStart, rangeEnd, selectedDates, time: parsed.time || null, hoveredDate: null };
     const focus = selectedDate || rangeStart || selectedDates[0];
     if (focus) Object.assign(changes, { focusedDate: focus, ...viewOf(focus) });
     this._state = updateState(s, changes);
@@ -717,11 +755,14 @@ class IntlDatepicker extends HTMLElementBase {
     }
 
     const dates = this._getValueDates();
-    if (min && dates.some(d => d.compare(min) < 0)) {
-      return fail('rangeUnderflow', fillLabel(labels.dateTooEarly, { date: this._formatForType(min) }));
+    // Date + time: on the min or max day, the time is checked too.
+    const sec = s.timeMode && s.selectedDate ? timeToSeconds(s.time) : null;
+    const [lo, hi] = timeBounds(s, s.selectedDate);
+    if (min && (dates.some(d => d.compare(min) < 0) || (sec != null && sec < lo))) {
+      return fail('rangeUnderflow', fillLabel(labels.dateTooEarly, { date: this._formatBound(min, timeBounds(s, min)[0]) }));
     }
-    if (max && dates.some(d => d.compare(max) > 0)) {
-      return fail('rangeOverflow', fillLabel(labels.dateTooLate, { date: this._formatForType(max) }));
+    if (max && (dates.some(d => d.compare(max) > 0) || (sec != null && sec > hi))) {
+      return fail('rangeOverflow', fillLabel(labels.dateTooLate, { date: this._formatBound(max, timeBounds(s, max)[1], 86399) }));
     }
 
     // Per-day rules apply to dates; week/month/year pick whole periods.
@@ -838,7 +879,8 @@ class IntlDatepicker extends HTMLElementBase {
     input.setAttribute('aria-expanded', String(!!s.isOpen && !s.inline));
     this._toggleAttr(input, 'aria-required', this.hasAttribute('required') ? 'true' : null);
     this._toggleAttr(input, 'aria-invalid', this._inputError ? 'true' : null);
-    this._toggleAttr(input, 'inputmode', allowInput ? 'numeric' : null);
+    // A typed time needs ":" (and AM/PM), which numeric keypads lack.
+    this._toggleAttr(input, 'inputmode', allowInput && !s.timeMode ? 'numeric' : null);
     this._clearBtn.hidden = !display || disabled || readonly;
     this._clearBtn.setAttribute('aria-label', s.labels.clearDate);
 
@@ -906,6 +948,13 @@ class IntlDatepicker extends HTMLElementBase {
         : 'YYYY/MM/DD';
     } catch {
       format = 'YYYY/MM/DD';
+    }
+    if (s.timeMode) {
+      // "MM/DD/YYYY hh:mm PM", "YYYY/MM/DD HH:mm"
+      const { periodFirst, pm } = this._fmt.timeLayout;
+      const clock = `${s.hourCycle === 12 ? 'hh' : 'HH'}:mm${s.timeMode === 'second' ? ':ss' : ''}`;
+      const time = s.hourCycle !== 12 ? clock : periodFirst ? `${pm} ${clock}` : `${clock} ${pm}`;
+      return { format: `${format} ${time}`, example: formatDateTime(sampleDate, { hour: 14, minute: 30, second: 0 }, this._fmt) };
     }
     return { format, example: formatDateShort(sampleDate, this._fmt) };
   }
@@ -993,12 +1042,16 @@ class IntlDatepicker extends HTMLElementBase {
   }
 
   _renderFooter() {
-    const { labels, selectedDate } = this._state;
+    const { labels, selectedDate, timeMode, inline } = this._state;
     const hint = this._rangeHint();
-    let html = `${hint ? `<div class="idp-range-hint" part="range-hint">${escAttr(hint)}</div>` : ''}
+    // Date + time: picking a day keeps the popup open, so Done closes it.
+    const done = timeMode && !inline
+      ? `<button class="idp-footer-btn idp-done-btn" part="done-button" data-action="done" type="button">${escAttr(labels.done)}</button>`
+      : '';
+    let html = `${hint ? `<div class="idp-range-hint" part="range-hint">${escAttr(hint)}</div>` : ''}${timeMode ? this._renderTime() : ''}
       <div class="idp-footer" part="footer">
-        <button class="idp-footer-btn" part="today-btn" data-action="today" type="button">${escAttr(labels.today)}</button>
-        <button class="idp-footer-btn" part="clear-btn" data-action="clear" type="button">${escAttr(labels.clear)}</button>
+        <button class="idp-footer-btn" part="today-btn" data-action="today" type="button">${escAttr(timeMode ? labels.now : labels.today)}</button>
+        <button class="idp-footer-btn" part="clear-btn" data-action="clear" type="button">${escAttr(labels.clear)}</button>${done}
       </div>
     `;
 
@@ -1008,6 +1061,75 @@ class IntlDatepicker extends HTMLElementBase {
     }
 
     return html;
+  }
+
+  // Hour, minute (and second) <select>s in a left-to-right block, as clocks
+  // read in every script, plus AM/PM before or after it as the locale puts it.
+  _renderTime() {
+    const { labels, hourCycle, timeMode } = this._state;
+    const { periodFirst, sep } = this._fmt.timeLayout;
+    const select = (part, label) => `<select class="idp-dropdown idp-time-select" part="time-select" data-action="time-${part}" aria-label="${escAttr(label)}">${this._timeOptions(part)}</select>`;
+    const colon = `<span class="idp-time-sep" aria-hidden="true">${escAttr(sep)}</span>`;
+    const period = hourCycle === 12 ? select('period', labels.dayPeriod) : '';
+    return `<div class="idp-time" part="time" role="group" aria-label="${escAttr(labels.time)}">${periodFirst ? period : ''}<span class="idp-time-fields" dir="ltr">${select('hour', labels.hour)}${colon}${select('minute', labels.minute)}${timeMode === 'second' ? colon + select('second', labels.second) : ''}</span>${periodFirst ? '' : period}</div>`;
+  }
+
+  // Options for one time <select>. Values are 24-hour; in 12-hour mode the
+  // hour list covers the current AM or PM half. On the min or max day,
+  // options entirely outside the bounds are disabled. A value off the
+  // minute step still gets its own option.
+  _timeOptions(part) {
+    const s = this._state;
+    const t = s.time || s.defaultTime;
+    const [lo, hi] = s.selectedDate ? timeBounds(s, s.selectedDate) : [0, 86399];
+    const pad = (n) => this._fmt.pad2.format(n);
+    const option = (value, text, from, to, selected) =>
+      `<option value="${value}"${selected ? ' selected' : ''}${to < lo || from > hi ? ' disabled' : ''}>${escAttr(text)}</option>`;
+    const hourStart = t.hour * 3600;
+    const minuteStart = hourStart + t.minute * 60;
+    let html = '';
+    if (part === 'period') {
+      const { am, pm } = this._fmt.timeLayout;
+      return option('am', am, 0, 43199, t.hour < 12) + option('pm', pm, 43200, 86399, t.hour >= 12);
+    }
+    if (part === 'hour') {
+      const twelve = s.hourCycle === 12;
+      const first = twelve && t.hour >= 12 ? 12 : 0;
+      for (let h = first; h < first + (twelve ? 12 : 24); h++) {
+        html += option(h, pad(twelve ? h % 12 || 12 : h), h * 3600, h * 3600 + 3599, h === t.hour);
+      }
+    } else if (part === 'minute') {
+      for (let m = 0; m < 60; m++) {
+        if (m % s.minuteStep && m !== t.minute) continue;
+        html += option(m, pad(m), hourStart + m * 60, hourStart + m * 60 + 59, m === t.minute);
+      }
+    } else {
+      for (let sec = 0; sec < 60; sec++) html += option(sec, pad(sec), minuteStart + sec, minuteStart + sec, sec === t.second);
+    }
+    return html;
+  }
+
+  // A time <select> changed. The value follows live; before a day is picked
+  // the time is kept for it.
+  _changeTime(part, raw) {
+    const s = this._state;
+    const t = { ...(s.time || s.defaultTime) };
+    if (part === 'period') t.hour = (t.hour % 12) + (raw === 'pm' ? 12 : 0);
+    else t[part] = +raw;
+    this._state = updateState(s, { time: s.selectedDate ? clampTime(s, s.selectedDate, t) : t });
+    // Options are replaced in place so the focused <select> (and a phone's
+    // open picker wheel) is left alone.
+    for (const select of this._calendarEl.querySelectorAll('.idp-time-select')) {
+      select.innerHTML = this._timeOptions(select.dataset.action.slice(5));
+    }
+    if (!s.selectedDate) return;
+    this._inputError = '';
+    this._syncInput();
+    this._updateFormValue();
+    this._updateExternalInput();
+    const detail = this._buildDetail();
+    this._emit('intl-select', detail);
+    this._emit('intl-change', detail);
   }
 
   _renderPresets() {
@@ -1239,12 +1361,17 @@ class IntlDatepicker extends HTMLElementBase {
     shadow.addEventListener('change', (e) => {
       const select = e.target.closest('select.idp-dropdown[data-action]');
       if (!select) return;
+      const action = select.dataset.action;
+      if (action.startsWith('time-')) {
+        this._changeTime(action.slice(5), select.value);
+        return;
+      }
       const { calendar, viewMonth } = this._state;
       const before = firstOfView(this._state);
       // Options carry the ISO date of their month's / year's first day.
       let date = parseISOToCalendar(select.value, calendar);
       if (!date) return;
-      if (select.dataset.action === 'dropdown-year') {
+      if (action === 'dropdown-year') {
         // Keep the visible month, clamped when leaving a 13-month year.
         date = date.add({ months: Math.min(viewMonth, calendar.getMonthsInYear(date)) - 1 });
       }
@@ -1373,17 +1500,31 @@ class IntlDatepicker extends HTMLElementBase {
       return;
     }
     const s = this._state;
-    const parsed = parseInput(text, s.calendarId, s.locale, this.getAttribute('date-format'));
-    const refusal = parsed && this._refusal(parsed);
+    const parsed = this._parseTyped(text);
+    const refusal = parsed && this._refusal(parsed.date);
     if (parsed && !refusal) {
       this._inputError = '';
-      this._selectDate(parsed);
+      this._selectDate(parsed.date, parsed.time);
     } else {
       // Persistent error until the next successful entry (no timed flash).
       this._inputError = refusal || fillLabel(s.labels.invalidDate, this._getInputFormat());
       this._syncInput();
       this._updateFormValue();
     }
+  }
+
+  // Typed text to `{date, time}` (time null when none was typed), or null.
+  _parseTyped(text) {
+    const s = this._state;
+    let time = null;
+    if (s.timeMode) {
+      const split = splitTime(text, s.locale);
+      if (!split) return null;
+      ({ text, time } = split);
+      if (time && s.timeMode !== 'second') time.second = 0;
+    }
+    const date = parseInput(text, s.calendarId, s.locale, this.getAttribute('date-format'));
+    return date && { date, time };
   }
 
   _handleAction(action, btn) {
@@ -1443,6 +1584,9 @@ class IntlDatepicker extends HTMLElementBase {
       case 'today':
         this._selectToday();
         break;
+      case 'done':
+        this._closeCalendar();
+        break;
       case 'apply-preset':
         this._applyPreset(btn.dataset.presetValue);
         break;
@@ -1501,14 +1645,16 @@ class IntlDatepicker extends HTMLElementBase {
     return !isDateDisabled(this._state, date);
   }
 
-  _selectDate(date) {
+  // `time` (date + time pickers) is a typed or "Now" time; otherwise the
+  // current or default time is kept, moved inside min/max for the new day.
+  _selectDate(date, time = null) {
     if (!date) return;
     const prev = this._state;
     const type = prev.type;
     const isPeriod = type === 'month' || type === 'year';
     if (isPeriod) date = getPeriodBounds(date, type).start;
 
-    const next = !isPeriod ? selectDate(prev, date)
+    let next = !isPeriod ? selectDate(prev, date)
       : this._isSelectable(date) ? updateState(prev, { selectedDate: date, focusedDate: date, ...viewOf(date) })
       : prev;
     if (next === prev) {
@@ -1517,10 +1663,17 @@ class IntlDatepicker extends HTMLElementBase {
       return;
     }
 
+    if (prev.timeMode) {
+      next = updateState(next, { time: time || clampTime(next, date, prev.time || prev.defaultTime) });
+    }
+
     const prevCount = prev.selectedDates?.length || 0;
+    const hadFocus = this._calendarEl?.contains(this.shadowRoot.activeElement);
     this._state = next;
     this._inputError = '';
     this._render();
+    // The popup stays open for the time: keep keyboard focus on the grid.
+    if (prev.timeMode && hadFocus) this._focusCurrentCell();
     this._updateFormValue();
     this._updateExternalInput();
     this._announceSelection(date, type === 'multiple' && this._state.selectedDates.length < prevCount);
@@ -1530,21 +1683,34 @@ class IntlDatepicker extends HTMLElementBase {
     this._emit('intl-change', detail);
 
     // Close once the selection is complete: not for multiple, nor after a
-    // range's first click (or its cancel). Small delay for visual feedback.
-    const complete = type !== 'multiple' && (type !== 'range' || this._state.rangeEnd);
+    // range's first click (or its cancel), nor while a time is still to be
+    // set (Done closes). Small delay for visual feedback.
+    const complete = !prev.timeMode && type !== 'multiple' && (type !== 'range' || this._state.rangeEnd);
     if (complete && !this._state.inline) {
       setTimeout(() => this._closeCalendar(), CLOSE_DELAY);
     }
   }
 
+  // "Today", or "Now" for date + time: today at the current time, rounded
+  // down to the minute step.
   _selectToday() {
-    const { type, today } = this._state;
+    const { type, today, timeMode, minuteStep } = this._state;
     const todayDate = type === 'month' || type === 'year' ? getPeriodBounds(today, type).start : today;
     if (!this._isSelectable(todayDate)) return;
     const prev = this._state;
+    let now = null;
+    if (timeMode) {
+      const d = new Date();
+      const minute = d.getMinutes();
+      now = clampTime(prev, todayDate, {
+        hour: d.getHours(),
+        minute: minute - (minute % minuteStep),
+        second: timeMode === 'second' && minuteStep === 1 ? d.getSeconds() : 0,
+      });
+    }
     const shown = updateState(prev, viewOf(todayDate));
     this._state = shown;
-    this._selectDate(todayDate);
+    this._selectDate(todayDate, now);
     // Refused (e.g. by a range rule): stay on the month the user was viewing.
     if (this._state === shown) this._state = prev;
     else if (this._view === 'days') this._navigated(firstOfView(prev));
@@ -1881,9 +2047,11 @@ class IntlDatepicker extends HTMLElementBase {
 
     // If the external input has a value, try to parse it
     if (input.value && !this.value) {
-      const parsed = parseInput(input.value, this._state.calendarId, this._state.locale, this.getAttribute('date-format'));
+      const parsed = this._parseTyped(input.value);
       if (parsed) {
-        this._state = updateState(selectDate(this._state, parsed), viewOf(parsed));
+        const { date, time } = parsed;
+        const next = selectDate(this._state, date);
+        this._state = updateState(next, { ...viewOf(date), ...(next.timeMode && { time: time || next.time || next.defaultTime }) });
         this._render();
         this._updateFormValue();
         this._updateExternalInput();
@@ -1931,7 +2099,9 @@ class IntlDatepicker extends HTMLElementBase {
       return;
     }
     if (removed || !date) return;
-    const text = s.type === 'month' || s.type === 'year' ? this.displayValue : this._formatDayLabel(date);
+    const text = s.type === 'month' || s.type === 'year' ? this.displayValue
+      : s.timeMode ? formatDateTime(date, s.time, this._fmt, this._fmt.dateTimeLong)
+      : this._formatDayLabel(date);
     this._announce(`${text}, ${labels.selected}`);
   }
 
@@ -1950,6 +2120,12 @@ class IntlDatepicker extends HTMLElementBase {
     if (type === 'month') return formatMonthYear(date, this._fmt);
     if (type === 'year') return this._fmt.year.format(calendarDateToNative(getPeriodBounds(date, 'year').start));
     return formatDateShort(date, this._fmt);
+  }
+
+  // A min/max for messages, with the time limit on that day unless it is
+  // the whole day (`none`: 0 for min, the day's last second for max).
+  _formatBound(date, sec, none = 0) {
+    return this._state.timeMode && sec !== none ? formatDateTime(date, secondsToTime(sec), this._fmt) : this._formatForType(date);
   }
 
   _formatNumber(n) {

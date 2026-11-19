@@ -4,7 +4,7 @@
 [![CI](https://github.com/eramhq/intl-datepicker/actions/workflows/test.yml/badge.svg)](https://github.com/eramhq/intl-datepicker/actions/workflows/test.yml)
 [![license](https://img.shields.io/npm/l/intl-datepicker.svg)](LICENSE)
 
-A multi-calendar datepicker Web Component using `Intl.DateTimeFormat` for display and `@internationalized/date` for calendar arithmetic. Select a date, range, week, multiple dates, month, or year. The package includes a React wrapper and works as a custom element in other frameworks.
+A multi-calendar datepicker Web Component using `Intl.DateTimeFormat` for display and `@internationalized/date` for calendar arithmetic. Select a date (optionally with a time of day), range, week, multiple dates, month, or year. The package includes a React wrapper and works as a custom element in other frameworks.
 
 **[English documentation](docs/en/overview.md) · [راهنمای فارسی](docs/fa/overview.md) · [Live demo](https://eramhq.github.io/intl-datepicker/) · [npm](https://www.npmjs.com/package/intl-datepicker)**
 
@@ -67,7 +67,7 @@ The selected day is 1 Farvardin 1403; `value` remains `2024-03-20`. Use `intl-da
 
 ## Values & time zones
 
-Values represent dates or periods, not timestamps. Day values are Gregorian ISO strings. Non-Gregorian month/year values include calendar annotations. [Storage, time zones, and valueAsDate](docs/en/values-and-events.md#values-and-time-zones).
+Values represent dates or periods, not timestamps. Day values are Gregorian ISO strings. Non-Gregorian month/year values include calendar annotations. With `time`, the value is a local clock time with no time zone, such as `2026-03-15T14:30` (the `datetime-local` format). [Storage, time zones, and valueAsDate](docs/en/values-and-events.md#values-and-time-zones).
 
 ### Programmatic values are kept
 
@@ -84,6 +84,10 @@ Parseable values can remain selected while violating bounds or availability. Nat
 ### Single Date (default)
 
 [Date selection](docs/en/picker-types.md#date-and-range).
+
+### Date and Time
+
+[`time`, `minute-step`, `hour-cycle`, and `default-time`](docs/en/picker-types.md#date-and-time).
 
 ### Date Range
 
@@ -111,7 +115,7 @@ Parseable values can remain selected while violating bounds or availability. Nat
 
 ## Attributes
 
-Attributes are documented by task: [calendar, locale, numerals, and labels](docs/en/localization.md), [type and selection options](docs/en/picker-types.md), [bounds and range rules](docs/en/constraints.md), [name, required, disabled, readonly, and for](docs/en/forms.md), [layout and appearance](docs/en/styling.md#layout-options), and [allow-input, date-format, and keyboard behavior](docs/en/accessibility.md).
+Attributes are documented by task: [calendar, locale, numerals, and labels](docs/en/localization.md), [type, time, and selection options](docs/en/picker-types.md), [bounds and range rules](docs/en/constraints.md), [name, required, disabled, readonly, and for](docs/en/forms.md), [layout and appearance](docs/en/styling.md#layout-options), and [allow-input, date-format, and keyboard behavior](docs/en/accessibility.md).
 
 ## Supported Calendars
 
@@ -156,6 +160,10 @@ Attributes are documented by task: [calendar, locale, numerals, and labels](docs
 ### Clinic appointment
 
 [Bounds, explicit weekdays, and availability filters](docs/en/constraints.md#bounds-and-unavailable-dates).
+
+### Meeting time
+
+[15-minute slots and converting to UTC](docs/en/recipes.md#meeting-times-and-utc).
 
 ### Payroll month (Persian, Hijri, …)
 

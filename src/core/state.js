@@ -36,20 +36,32 @@ export function createState(options = {}) {
     sortDates = false,
     fixedWeeks = false,
     labels = null,
+    // Time of day, date pickers only: null (off), 'minute' or 'second'.
+    timeMode = null,
+    minuteStep = null,
+    hourCycle = null,
+    defaultTime = null,
   } = options;
 
   const calendar = getCalendar(calendarId);
   const firstDayOfWeek = resolveFirstDayOfWeek(options.firstDayOfWeek, locale);
+  const timeOpts = type === 'date' && timeMode ? {
+    timeMode,
+    minuteStep: Math.min(nonNegativeInt(minuteStep) || 1, 59) || 1,
+    hourCycle: resolveHourCycle(locale, hourCycle),
+    defaultTime: parseTime(defaultTime) || ZERO_TIME,
+  } : null;
 
   let selectedDate = null;
   let rangeStart = null;
   let rangeEnd = null;
   let selectedDates = [];
+  let time = null;
 
   if (value) {
-    const parsed = parseValueForType(value, type, calendar, locale, firstDayOfWeek);
+    const parsed = parseValueForType(value, type, calendar, locale, firstDayOfWeek, timeOpts);
     if (parsed) {
-      ({ selectedDate, rangeStart, rangeEnd, selectedDates } = parsed);
+      ({ selectedDate, rangeStart, rangeEnd, selectedDates, time = null } = parsed);
       if (type === 'multiple') {
         if (maxDates) selectedDates = selectedDates.slice(0, maxDates);
         if (sortDates) selectedDates.sort((a, b) => a.compare(b));
@@ -64,7 +76,16 @@ export function createState(options = {}) {
     if (d >= 0) dows.add(d);
   }
 
+  // A bound with a time of day: `min` keeps the day (the grid's unit) and
+  // `minTime` the time; a date-only bound means that whole day.
+  const minDT = timeOpts && parseDateTime(min, calendar);
+  const maxDT = timeOpts && parseDateTime(max, calendar);
+
   const state = withToday({
+    ...timeOpts,
+    time,
+    _minTime: minDT ? minDT.time : null,
+    _maxTime: maxDT ? maxDT.time : null,
     calendarId,
     calendar,
     locale,
@@ -78,8 +99,8 @@ export function createState(options = {}) {
     isOpen: inline,
     inline,
     // User bounds; `min`/`max` are these narrowed by disable-past/-future.
-    _min: parseBound(min, type, calendar, locale, firstDayOfWeek, false),
-    _max: parseBound(max, type, calendar, locale, firstDayOfWeek, true),
+    _min: minDT ? minDT.date : parseBound(min, type, calendar, locale, firstDayOfWeek, false),
+    _max: maxDT ? maxDT.date : parseBound(max, type, calendar, locale, firstDayOfWeek, true),
     disablePast,
     disableFuture,
     hoveredDate: null,
@@ -96,7 +117,7 @@ export function createState(options = {}) {
     sortDates,
     fixedWeeks,
     labels: labels || resolveLabels(locale, null),
-    _fmt: createFormatters(locale, calendarId, numerals, firstDayOfWeek),
+    _fmt: createFormatters(locale, calendarId, numerals, firstDayOfWeek, timeOpts),
   }, todayIn(calendar));
 
   const focusDate = selectedDate || rangeStart || selectedDates[0] || state.today;
@@ -118,7 +139,15 @@ function withToday(state, now) {
   const end = isWeek ? endOfWeek(now, locale, firstDayOfWeek) : start;
   const later = state.disablePast && (!_min || start.compare(_min) > 0) ? start : _min;
   const earlier = state.disableFuture && (!_max || end.compare(_max) < 0) ? end : _max;
-  return { ...state, today: now, min: later, max: earlier };
+  // A bound's time only applies while the bound is the user's own day.
+  return {
+    ...state,
+    today: now,
+    min: later,
+    max: earlier,
+    minTime: later === _min ? state._minTime : null,
+    maxTime: earlier === _max ? state._maxTime : null,
+  };
 }
 
 /**
@@ -500,6 +529,89 @@ const ISO_DATE_RE = /^(\d{4}-\d{2}-\d{2})(?:\[u-ca=[a-z0-9-]+\])?$/;
 
 const pad = (n, len) => String(n).padStart(len, '0');
 
+// --- Time of day ---
+// Times are `{hour, minute, second}` wall-clock values, with no time zone.
+
+const ZERO_TIME = Object.freeze({ hour: 0, minute: 0, second: 0 });
+const DAY_SECONDS = 86400;
+
+const makeTime = (hour, minute, second = 0) =>
+  hour < 24 && minute < 60 && second < 60 ? { hour, minute, second } : null;
+
+export const timeToSeconds = (t) => t.hour * 3600 + t.minute * 60 + t.second;
+
+export const secondsToTime = (s) => ({ hour: Math.floor(s / 3600), minute: Math.floor(s / 60) % 60, second: s % 60 });
+
+/**
+ * Parse `"HH:mm"` or `"HH:mm:ss"` (the hour may be one digit). Null when
+ * invalid.
+ */
+export function parseTime(str) {
+  const m = String(str ?? '').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  return m && makeTime(+m[1], +m[2], +(m[3] || 0));
+}
+
+/**
+ * Parse `"YYYY-MM-DD"` or `"YYYY-MM-DDTHH:mm[:ss]"` (the `datetime-local` /
+ * `Temporal.PlainDateTime` format) into `{date, time}`, with `time` null for
+ * a date-only string. Null when invalid.
+ */
+export function parseDateTime(value, calendar) {
+  const m = String(value ?? '').match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  const date = m && parseISOToCalendar(m[1], calendar);
+  if (!date) return null;
+  if (!m[2]) return { date, time: null };
+  const time = makeTime(+m[2], +m[3], +(m[4] || 0));
+  return time && { date, time };
+}
+
+/**
+ * The locale's clock, 12 or 24, unless `override` is "12" or "24".
+ */
+export function resolveHourCycle(locale, override) {
+  if (override == 12 || override == 24) return +override;
+  try {
+    const hc = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle;
+    return hc === 'h11' || hc === 'h12' ? 12 : 24;
+  } catch {
+    return 24;
+  }
+}
+
+/**
+ * Seconds of the day `[lo, hi]` allowed on `date`: narrower than the whole
+ * day on the min or max day of a bound with a time, and today under
+ * disable-past (from now, rounded up to the minute step) or disable-future
+ * (up to now). `now` is read on each call; nothing re-checks it on a timer.
+ */
+export function timeBounds(state, date, now = new Date()) {
+  const { min, max, minTime, maxTime } = state;
+  let lo = minTime && date && !date.compare(min) ? timeToSeconds(minTime) : 0;
+  let hi = maxTime && date && !date.compare(max) ? timeToSeconds(maxTime) : DAY_SECONDS - 1;
+  if (state.timeMode && date && !date.compare(state.today)) {
+    const sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const step = state.timeMode === 'second' ? 1 : state.minuteStep * 60;
+    if (state.disablePast) lo = Math.max(lo, Math.ceil(sec / step) * step);
+    if (state.disableFuture) hi = Math.min(hi, sec);
+  }
+  return [lo, hi];
+}
+
+/**
+ * `time` moved inside the bounds `timeBounds` gives for `date`, on whole
+ * minutes in minute mode.
+ */
+export function clampTime(state, date, time) {
+  let [lo, hi] = timeBounds(state, date);
+  if (state.timeMode !== 'second') {
+    lo = Math.ceil(lo / 60) * 60;
+    hi = Math.floor(hi / 60) * 60;
+  }
+  const sec = timeToSeconds(time);
+  if (lo > hi) return time;
+  return sec < lo ? secondsToTime(lo) : sec > hi ? secondsToTime(hi) : time;
+}
+
 /**
  * Parse a type-aware value string to a CalendarDate in the given calendar.
  * - week:  YYYY-Www → Monday of that ISO week
@@ -555,9 +667,19 @@ function parseBound(value, type, calendar, locale, firstDayOfWeek, isMax) {
  * Returns null when the string isn't a valid value for that type.
  * Values on disabled dates are kept; validity reports them.
  */
-export function parseValueForType(value, type, calendar, locale, firstDayOfWeek) {
+export function parseValueForType(value, type, calendar, locale, firstDayOfWeek, timeOpts = null) {
   const empty = { selectedDate: null, rangeStart: null, rangeEnd: null, selectedDates: [] };
   if (!value) return empty;
+
+  if (timeOpts) {
+    // Date + time: a date-only value gets the default time; seconds are
+    // dropped unless the picker shows them.
+    const parsed = parseDateTime(value, calendar);
+    if (!parsed) return null;
+    const time = { ...(parsed.time || timeOpts.defaultTime) };
+    if (timeOpts.timeMode !== 'second') time.second = 0;
+    return { ...empty, selectedDate: parsed.date, time };
+  }
 
   if (type === 'range') {
     const [startIso, endIso] = value.split('/');
@@ -651,6 +773,10 @@ export function serializeValueForType(state) {
     }
     const { start } = getPeriodBounds(selectedDate, type);
     return `${toISO(start)}[u-ca=${resolveIntlCalendar(state.calendarId)}]`;
+  }
+  if (state.timeMode && selectedDate) {
+    const { hour, minute, second } = state.time || state.defaultTime;
+    return `${toISO(selectedDate)}T${pad(hour, 2)}:${pad(minute, 2)}${state.timeMode === 'second' ? `:${pad(second, 2)}` : ''}`;
   }
   return toISO(selectedDate);
 }

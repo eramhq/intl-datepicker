@@ -67,6 +67,8 @@ intl-datepicker::part(input-wrapper) { border-width: 2px; }
 | `alternate` | Gregorian equivalent line |
 | `presets` | Range preset container |
 | `range-hint` | Pending range's length guidance |
+| `time`, `time-select` | Time-of-day row (`time`) and its hour, minute, second and AM/PM selects |
+| `done-button` | Done button that closes a date-and-time popup |
 
 `clear-btn` targets the footer clear button, not the small input clear button. Parts do not expose arbitrary internal descendants or state classes. Global `.idp-day` rules cannot cross the shadow boundary. Internal classes are implementation details, not a styling contract.
 

@@ -18,10 +18,11 @@ const STRING_ATTRS = [
   'disabled-dates', 'date-separator', 'max-dates',
   'months', 'date-format', 'caption-layout',
   'min-nights', 'max-nights', 'disabled-days-of-week', 'first-day-of-week',
+  'minute-step', 'hour-cycle', 'default-time',
 ];
 
 // Boolean or string: `true` sets the bare attribute, a string passes through.
-const BOOLEAN_OR_STRING_ATTRS = ['exclude-disabled'];
+const BOOLEAN_OR_STRING_ATTRS = ['exclude-disabled', 'time'];
 
 // Camel-cased lookup of every attribute name we manage so we can route
 // unknown props to the underlying element via JSX.

@@ -462,3 +462,22 @@ describe('value property before connection (React 19 assigns properties)', () =>
     expect(events).toHaveLength(1);
   });
 });
+
+describe('date + time values (Temporal format)', () => {
+  it('round-trips through Temporal.PlainDateTime', () => {
+    const el = makePicker({ time: true, calendar: 'persian', locale: 'fa-IR', value: '2026-11-18T14:30' });
+    const dt = Temporal.PlainDateTime.from(el.value);
+    expect([dt.year, dt.month, dt.day, dt.hour, dt.minute]).toEqual([2026, 11, 18, 14, 30]);
+    expect(dt.withCalendar('persian').year).toBe(1405);
+    expect(dt.toString({ smallestUnit: 'minute' })).toBe(el.value);
+
+    const withSeconds = makePicker({ time: 'second', value: '2026-11-18T14:30:05' });
+    expect(Temporal.PlainDateTime.from(withSeconds.value).toString()).toBe(withSeconds.value);
+  });
+
+  it('accepts what Temporal.PlainDateTime prints', () => {
+    const el = makePicker({ time: true });
+    el.value = Temporal.PlainDateTime.from({ year: 2026, month: 11, day: 18, hour: 9, minute: 5 }).toString();
+    expect(el.value).toBe('2026-11-18T09:05');
+  });
+});

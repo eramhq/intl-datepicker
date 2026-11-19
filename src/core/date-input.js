@@ -173,6 +173,55 @@ export function parseInput(text, calendarId, locale, format) {
   return safeCreateInCalendar(year, month, day, calendarId);
 }
 
+const TIME_RE = /(\d{1,2})\s*[:：]\s*(\d{2})(?:\s*[:：]\s*(\d{2}))?/;
+// Typed day periods besides the locale's own: English and Persian short forms.
+const AM_WORDS = ['am', 'a.m.', 'a', 'ق.ظ'];
+const PM_WORDS = ['pm', 'p.m.', 'p', 'ب.ظ'];
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function hasWord(text, words) {
+  return words.some(w => w && new RegExp(`(?:^|[\\s\\d,،/.-])${escapeRe(w)}(?=$|[\\s\\d,،/.-])`).test(text));
+}
+
+function localePeriod(locale, hour) {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', hourCycle: 'h12' })
+      .formatToParts(new Date(2000, 0, 1, hour)).find(p => p.type === 'dayPeriod')?.value.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Split a typed time off date text: `H:mm[:ss]`, optionally with a day period
+ * (am/pm, or the locale's own such as "م" or "午後") before or after it.
+ * Digits are normalized to ASCII first.
+ *
+ * Returns `{text, time}`: `text` is the date part for `parseInput`, and
+ * `time` is `{hour, minute, second}` or null when no time was typed. Returns
+ * null when the time is invalid ("25:00", "13:00 pm").
+ */
+export function splitTime(input, locale) {
+  const normalized = normalizeDigits(String(input || ''));
+  const m = normalized.match(TIME_RE);
+  if (!m) return { text: normalized, time: null };
+  const before = normalized.slice(0, m.index);
+  const after = normalized.slice(m.index + m[0].length);
+  const rest = `${before} ${after}`.toLowerCase();
+  let hour = +m[1];
+  const minute = +m[2];
+  const second = +(m[3] || 0);
+  const pm = hasWord(rest, [...PM_WORDS, localePeriod(locale, 21)]);
+  if (pm || hasWord(rest, [...AM_WORDS, localePeriod(locale, 9)])) {
+    if (hour < 1 || hour > 12) return null;
+    hour = (hour % 12) + (pm ? 12 : 0);
+  }
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  // The date is usually before the time; a period word or ", " around it is dropped.
+  const text = (/\d/.test(before) ? before : after).replace(/^[^0-9]+|[^0-9]+$/g, '');
+  return { text, time: { hour, minute, second } };
+}
+
 /**
  * Adjust a date segment (year, month, or day) by a delta.
  * Used for arrow up/down keyboard input on segments.

@@ -252,3 +252,48 @@ describe('range rules', () => {
     expect(el.checkValidity()).toBe(true);
   });
 });
+
+describe('date + time', () => {
+  it('keeps the popup open for the time, follows the selects live and closes on Done', async () => {
+    const host = mount(`<form><intl-datepicker name="at" time locale="en-GB" value="2026-11-18T09:00" no-animation></intl-datepicker></form>`);
+    const form = host.querySelector('form');
+    const el = form.firstElementChild;
+    const cal = await openPicker(el);
+    expect(el.shadowRoot.activeElement.dataset.iso).toBe('2026-11-18');
+
+    // Keyboard pick: the popup stays open and focus stays on the grid.
+    await userEvent.keyboard('{ArrowRight}{Enter}');
+    await new Promise(r => setTimeout(r, 250));
+    expect(cal.matches(':popover-open')).toBe(true);
+    expect(el.shadowRoot.activeElement.dataset.iso).toBe('2026-11-19');
+    expect(el.value).toBe('2026-11-19T09:00');
+
+    const hour = $(el, 'select[data-action="time-hour"]');
+    hour.focus();
+    await userEvent.selectOptions(hour, '14');
+    expect(el.value).toBe('2026-11-19T14:00');
+    expect(new FormData(form).get('at')).toBe('2026-11-19T14:00');
+    expect($(el, '.idp-input').value).toBe(el.displayValue);
+    expect(cal.matches(':popover-open')).toBe(true);
+    expect(el.shadowRoot.activeElement).toBe(hour);
+
+    await userEvent.click($(el, '[data-action="done"]'));
+    expect(cal.matches(':popover-open')).toBe(false);
+  });
+
+  it('lays out a Persian time left to right inside the RTL panel', async () => {
+    const host = mount('<intl-datepicker time calendar="persian" locale="fa-IR" value="2026-11-18T14:30" inline></intl-datepicker>');
+    const el = host.firstElementChild;
+    const hour = $(el, 'select[data-action="time-hour"]').getBoundingClientRect();
+    const minute = $(el, 'select[data-action="time-minute"]').getBoundingClientRect();
+    expect(hour.left).toBeLessThan(minute.left);
+    expect(el.displayValue).toContain('۱۴:۳۰');
+  });
+
+  it('reports a time before min through validity', async () => {
+    const host = mount('<intl-datepicker time locale="en-US" min="2026-11-18T09:30" value="2026-11-18T09:00"></intl-datepicker>');
+    const el = host.firstElementChild;
+    expect(el.validity.rangeUnderflow).toBe(true);
+    expect(el.validationMessage).toBe('Date must be 11/18/2026, 9:30 AM or later');
+  });
+});

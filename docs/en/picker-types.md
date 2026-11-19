@@ -16,7 +16,7 @@ Import `intl-datepicker` for these Gregorian examples. Set `type` before setting
 | `month` | `2026-03` | Gregorian month |
 | `year` | `2026` | Gregorian year |
 
-No selection serializes as `''` for every type. Date/range/week/multiple output remains Gregorian/ISO regardless of the visible calendar. Non-Gregorian month/year output is described below.
+No selection serializes as `''` for every type. Date/range/week/multiple output remains Gregorian/ISO regardless of the visible calendar. Non-Gregorian month/year output is described below. A `date` picker can also pick a time of day; see [date and time](#date-and-time).
 
 ## Date and range
 
@@ -26,6 +26,34 @@ No selection serializes as `''` for every type. Date/range/week/multiple output 
 ```
 
 A range's first click selects a start, its second click completes the range. Clicking an earlier end sorts the endpoints. A later selection begins a new range. If a same-day range is prohibited, clicking the pending start again clears it. Use `required` when a start without an end must fail validation. Range length is end minus start, measured in nights; it is five nights in this example. See [range rules](constraints.md#range-rules).
+
+## Date and time
+
+Add `time` to a date picker to pick hours and minutes as well:
+
+```html
+<intl-datepicker time locale="en-US" value="2026-03-15T14:30"></intl-datepicker>
+<intl-datepicker time="second" locale="en-GB" value="2026-03-15T14:30:05"></intl-datepicker>
+<intl-datepicker time minute-step="15" default-time="09:00"></intl-datepicker>
+```
+
+| Attribute | Meaning |
+| --- | --- |
+| `time` | Pick hours and minutes; the value is `YYYY-MM-DDTHH:mm` |
+| `time="second"` | Also pick seconds; the value is `YYYY-MM-DDTHH:mm:ss` |
+| `minute-step` | Offer only every Nth minute, e.g. `15` for :00, :15, :30, :45. Default `1` |
+| `hour-cycle` | `12` or `24`; defaults to the locale's clock (see [localization](localization.md#time-of-day)) |
+| `default-time` | `HH:mm[:ss]` filled in when a day is picked first. Default `00:00` |
+
+The value is a local wall-clock date and time without a time zone; see [values](values-and-events.md#values-and-time-zones). The first example displays `03/15/2026, 2:30 PM`. A date-only value such as `2026-03-15` is accepted and gets `default-time`.
+
+The time row sits under the calendar: native `<select>` menus for hour, minute, an optional second and, on a 12-hour clock, AM/PM. Phones show their own picker wheel. Changing a select updates the value immediately and emits `intl-select` and `intl-change`; a time chosen before any day is kept and applied when a day is picked. Picking another day keeps the current time. A value off the minute step, such as `14:07` with `minute-step="15"`, is kept and shown as an extra option.
+
+Picking a day does not close the popup. **Done**, Escape, or a click outside closes it. The **Today** button becomes **Now**: today at the current time, rounded down to the minute step. Inline calendars have no Done button.
+
+`min`/`max` may carry a time, and with `time`, `disable-past`/`disable-future` also limit the times on today: past times before now, future times after now. See [bounds with a time](forms.md#bounds-with-a-time).
+
+In this version `time` works only with `type="date"`. For other types it is ignored with a console warning. Removing `time` keeps the selected day as a date-only value.
 
 ## Week
 

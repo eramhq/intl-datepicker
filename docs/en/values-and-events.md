@@ -7,9 +7,11 @@ description: Store date-only values, handle events, and use the element's JavaSc
 
 `value` is a string representing a date or period, not an instant. For a day, `2026-03-15` means the Gregorian calendar day regardless of the display calendar. Keep it as a date-only value in your data model. Store range endpoints as separate dates when useful; week, multiple, and annotated period values need a schema appropriate to their shapes, not a single SQL DATE column.
 
-Avoid converting a date-only string to a timestamp merely to store it. If your application needs an instant, it must choose a time and a time zone explicitly; the picker has no time-of-day or time-zone option.
+Avoid converting a date-only string to a timestamp merely to store it. If your application needs an instant, it must choose a time and a time zone explicitly. The picker has no time-zone option.
 
-`valueAsDate` is a convenience native `Date` at local midnight. It is null for empty, range, and multiple selection; month/year use the first day of the period. Week returns the ISO week's Monday, which may differ from the configured locale week's start. Prefer `rangeStart` and `rangeEnd` for week boundaries.
+With the [`time` attribute](picker-types.md#date-and-time), a date picker's value is a local wall-clock date and time: `2026-03-15T14:30`, or `2026-03-15T14:30:05` with `time="second"`. It names a clock reading, not an instant, in the same format as `<input type="datetime-local">` and `Temporal.PlainDateTime`. The date part stays Gregorian ISO in every calendar. A date-only value gets `default-time`; seconds are dropped unless `time="second"`. Store it as a timestamp without time zone, or convert it deliberately (see the [UTC recipe](recipes.md#meeting-times-and-utc)).
+
+`valueAsDate` is a convenience native `Date` at local midnight; with `time`, it is that wall-clock time in the runtime's time zone. It is null for empty, range, and multiple selection; month/year use the first day of the period. Week returns the ISO week's Monday, which may differ from the configured locale week's start. Prefer `rangeStart` and `rangeEnd` for week boundaries.
 
 “Today” uses the runtime's detected time zone, cached by the module. Today, relative presets, and `disable-past`/`disable-future` depend on that zone. The component refreshes today on rendering and interaction, not via a midnight timer. For a business cutoff in another zone, compute the allowed dates in your application and pass explicit bounds.
 
@@ -66,13 +68,13 @@ Every `SelectDetail` includes `type`, `value`, and `formatted`.
 
 | Type | Additional fields |
 | --- | --- |
-| `date` | `calendar: { year, month, day }` or null |
+| `date` | `calendar: { year, month, day }` or null; with `time`, also `time: { hour, minute, second }` or null |
 | `range`, `week` | `start` and `end`: active-calendar `{ year, month, day }` objects or null |
 | `multiple` | `dates`: array of active-calendar `{ year, month, day }` objects |
 | `month` | `calendar: { year, month }` or null; Gregorian ISO `start`/`end` strings or null |
 | `year` | `calendar: { year }` or null; Gregorian ISO `start`/`end` strings or null |
 
-On clear, events carry an empty `value`, null scalar date fields, or an empty `dates` list. In contrast, `getValue()` returns null when empty. A pending range has a start and null end. Month/year bounds include the final day.
+The `time` field exists only with the `time` attribute; `second` is `0` unless `time="second"`. On clear, events carry an empty `value`, null scalar date fields, or an empty `dates` list. In contrast, `getValue()` returns null when empty. A pending range has a start and null end. Month/year bounds include the final day.
 
 `NavigateDetail` contains `year`, `month` in the active calendar, `direction` (`forward` or `backward`), and Gregorian ISO `start`/`end` covering all visible month panels. It is not emitted on initial mount: load initial availability explicitly.
 
@@ -118,6 +120,6 @@ picker.setValue('2026-03');
 
 The example logs `3`, `2026-03-01`, and `2026-03-31`. Narrow `SelectDetail` by `type` before using type-specific fields, and handle cleared selections.
 
-The declaration entry exports `DatepickerType`, `DayOfWeekName`, `ExcludeDisabledMode`, `DateFormat`, `CaptionLayout`, all six detail interfaces, `SelectDetail`, `NavigateDetail`, `DayInfo`, `MapDaysInput`, `MapDaysResult`, `MapDaysFn`, `RangePreset`, `DisabledDatesFilterFn`, `IntlDatepickerLabels`, `PluralLabel`, and `IntlDatepickerEventMap`. It augments element tag-name and event maps. React exports `IntlDatepickerProps` and `IntlDatepickerRef`.
+The declaration entry exports `DatepickerType`, `DayOfWeekName`, `ExcludeDisabledMode`, `TimeGranularity`, `HourCycle`, `TimeOfDay`, `DateFormat`, `CaptionLayout`, all six detail interfaces, `SelectDetail`, `NavigateDetail`, `DayInfo`, `MapDaysInput`, `MapDaysResult`, `MapDaysFn`, `RangePreset`, `DisabledDatesFilterFn`, `IntlDatepickerLabels`, `PluralLabel`, and `IntlDatepickerEventMap`. It augments element tag-name and event maps. React exports `IntlDatepickerProps` and `IntlDatepickerRef`.
 
 Use `IntlDatepickerElement` as a type, not a runtime constructor. The runtime exports `IntlDatepicker` and `register`, but the current declarations do not declare those exports. Also, the element's typed `labels`/`presets` setters accept objects/arrays only, although runtime accepts JSON strings. Prefer the documented side-effect import and object/array setters in TypeScript.

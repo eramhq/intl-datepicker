@@ -46,6 +46,12 @@ Set `numerals="latn"` for Latin digits in a Persian interface, or another suppor
 
 The component detects RTL from `locale` and sets its own `dir="rtl"`; horizontal keyboard movement follows that direction. Setting an unrelated ancestor's `dir` does not change the calendar's locale or keyboard rules. Configure `locale` explicitly when direction matters.
 
+## Time of day
+
+With [`time`](picker-types.md#date-and-time), the clock follows the locale: `en-US` and `ar-SA` use 12 hours with AM/PM; `fa-IR`, `he-IL`, `en-GB`, `ja-JP` and `th-TH` use 24 hours. Set `hour-cycle="12"` or `"24"` to override. Option text is padded to two digits and uses the picker's numerals, so `fa-IR` shows `۱۴:۳۰` and `numerals="latn"` shows `14:30`. AM/PM text comes from `Intl` (`AM`/`PM`, `ص`/`م`, `午前`/`午後`) and sits before the hour where the locale puts it, as in Japanese and Korean. Hours and minutes stay left to right inside an RTL panel, as clocks read in Persian, Arabic and Hebrew.
+
+With `allow-input`, a time can follow the typed date: `۱۴۰۵/۰۸/۲۷ ۱۴:۳۰`, `11/18/2026 2:30 PM`, or `۱۴۰۵/۰۸/۲۷ ۲:۳۰ ب.ظ`. Localized digits, the locale's AM/PM text, `am`/`pm` and the Persian `ق.ظ`/`ب.ظ` are recognized. A typed date without a time keeps the current time, or `default-time`. The hint becomes, for example, `DD/MM/YYYY HH:mm`.
+
 `first-day-of-week` accepts `0`–`6` (Sunday is `0`) or `sun` through `sat`. Weekends come from locale week information with internal fallbacks. Use explicit `disabled-days-of-week` when business rules must not depend on runtime locale data. See [constraints](constraints.md).
 
 ## Locale labels
@@ -81,6 +87,8 @@ A `labels` attribute accepts the same object as JSON. Property overrides take pr
 | `rangeUnavailable`, `rangeIncomplete` | Unavailable range or missing end |
 | `minNightsHint`, `maxNightsHint` | Pending range guidance: `{nights}` |
 | `nights` | String with `{n}`, or plural forms with a required `other` form |
+| `now`, `done` | With `time`: the Now button (replacing Today) and the Done button |
+| `time`, `hour`, `minute`, `second`, `dayPeriod` | With `time`: accessible names of the time row and its selects |
 
 Plural categories use `Intl.PluralRules`; `{n}` uses the selected numerals. See `IntlDatepickerLabels` and `PluralLabel` in the [type reference](values-and-events.md#typescript).
 
